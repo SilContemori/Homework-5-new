@@ -85,6 +85,7 @@ class FigureContextExtractor:
                 # Creazione del pacchetto dati per la figura
                 figure_data = {
                     "paper_id": paper_id,
+                    "paper_title": paper.get('title', ''),  # Titolo del paper
                     "figure_id": f"fig_{i}",
                     "url": img_url,
                     "caption": caption,

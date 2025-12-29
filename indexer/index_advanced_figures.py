@@ -36,6 +36,7 @@ class FiguresIndexer:
                 "properties": {
                     "url": {"type": "keyword"},
                     "paper_id": {"type": "keyword"},
+                    "paper_title": {"type": "text", "analyzer": "standard"},
                     "figure_id": {"type": "keyword"},
                     "caption": {"type": "text", "analyzer": "standard"},
                     "mentions": {"type": "text", "analyzer": "standard"},
@@ -68,6 +69,7 @@ class FiguresIndexer:
                 "_source": {
                     "url": fig["url"],
                     "paper_id": fig["paper_id"],
+                    "paper_title": fig.get("paper_title", ""),
                     "figure_id": fig["figure_id"],
                     "caption": fig["caption"],
                     "mentions": fig["mentions"],
