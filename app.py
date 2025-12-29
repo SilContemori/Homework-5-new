@@ -53,9 +53,12 @@ def search():
 @app.route('/paper/<paper_id>')
 def view_paper(paper_id):
     """Mostra l'HTML completo del paper"""
+    table_number = request.args.get('table', type=int)
+
     res = es.get(index="papers_index", id=paper_id)
     paper = res['_source']
-    return render_template('paper.html', paper=paper)
+
+    return render_template('paper.html', paper=paper, table_number=table_number)
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

@@ -1,46 +1,189 @@
 <!DOCTYPE html>
-<html>
+<html lang="it">
 <head>
-    <title>Risultati per {{ query }}</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search Results: {{ query }}</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        body {
+            background: #f5f5f5;
+            font-family: 'Georgia', 'Times New Roman', serif;
+            padding: 30px 0;
+        }
+        .results-container {
+            background: white;
+            border-radius: 8px;
+            padding: 40px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            max-width: 1100px;
+            margin: 0 auto;
+            border-top: 4px solid #c53030;
+        }
+        .back-btn {
+            color: #c53030;
+            text-decoration: none;
+            font-weight: 600;
+            display: inline-block;
+            margin-bottom: 20px;
+            transition: color 0.2s;
+        }
+        .back-btn:hover {
+            color: #9b2c2c;
+            text-decoration: underline;
+        }
+        h2 {
+            color: #1a202c;
+            font-weight: 600;
+            margin-bottom: 25px;
+        }
+        .badge-category {
+            background: #c53030;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 3px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .result-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-left: 3px solid #c53030;
+            border-radius: 4px;
+            padding: 25px;
+            margin-bottom: 20px;
+            position: relative;
+            transition: box-shadow 0.2s;
+        }
+        .result-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        .paper-title-corner {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            max-width: 45%;
+            text-align: right;
+            font-size: 0.85rem;
+            color: #718096;
+            font-style: italic;
+            padding-left: 15px;
+            border-left: 2px solid #e2e8f0;
+        }
+        .result-card h4, .result-card h5 {
+            color: #1a202c;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+        .result-card h4 {
+            font-size: 1.3rem;
+        }
+        .result-card h5 {
+            font-size: 1.1rem;
+        }
+        .result-card p {
+            color: #4a5568;
+            line-height: 1.6;
+        }
+        .table-number {
+            background: #c53030;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 3px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-right: 10px;
+        }
+        .caption-text {
+            color: #2d3748;
+            font-size: 1rem;
+        }
+        .btn-view-table {
+            background: #c53030;
+            color: white;
+            text-decoration: none;
+            padding: 8px 20px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: background 0.2s;
+            display: inline-block;
+        }
+        .btn-view-table:hover {
+            background: #9b2c2c;
+            color: white;
+        }
+        .relevance-score {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            font-size: 0.8rem;
+            color: #a0aec0;
+        }
+        .no-results {
+            text-align: center;
+            padding: 40px;
+            color: #718096;
+        }
+        .authors {
+            color: #718096;
+            font-size: 0.95rem;
+            margin-bottom: 15px;
+        }
+    </style>
 </head>
-<body class="container mt-4">
-    <a href="/" class="btn btn-outline-secondary mb-3">Torna alla Home</a>
-    <h2>Risultati per: "{{ query }}" in {{ category }}</h2>
-    <hr>
+<body>
+    <div class="container">
+        <div class="results-container">
+            <a href="/" class="back-btn">← Back to search</a>
+            <h2>Search Results for: "{{ query }}" <span class="badge-category">{{ category }}</span></h2>
+            <hr style="border-color: #e2e8f0; margin: 25px 0;">
 
-    <div class="list-group">
-        {% for hit in hits %}
-            <div class="list-group-item mb-3 shadow-sm p-4 position-relative">
-                {% if category == 'tables' or category == 'figures' %}
-                    <small class="position-absolute top-0 end-0 m-3 text-muted">
-                        {{ hit._source.paper_title }}
-                    </small>
-                {% endif %}
-                {% if category == 'papers' %}
-                    <h4>{{ hit._source.title }}</h4>
-                    <p><strong>Autori:</strong> {{ hit._source.authors }}</p>
-                    <p class="text-muted">{{ hit._source.abstract[:300] }}...</p>
-                {% elif category == 'tables' %}
-                    <h5><strong>{{ hit._source.paper_title }}</strong></h5>
-                    <p class="mb-1"><strong>Tabella {{ hit._source.table_number }}:</strong> {{ hit._source.caption }}</p>
-                    <a href="/paper/{{ hit._source.paper_id }}" class="btn btn-primary btn-sm">
-                        Visualizza documento completo
-                    </a>
-                {% elif category == 'figures' %}
-                    <h5>Figura da Paper ID: {{ hit._source.paper_id }}</h5>
-                    <p><strong>Didascalia:</strong> {{ hit._source.caption }}</p>
-                    <img src="{{ hit._source.url }}" class="img-fluid rounded border" style="max-height: 300px;" alt="Figura">
-                {% endif %}
-                <div class="mt-2">
-                    <small class="text-secondary">Punteggio rilevanza: {{ hit._score }}</small>
+            {% if hits %}
+                {% for hit in hits %}
+                    <div class="result-card">
+                        {% if category == 'tables' or category == 'figures' %}
+                            <div class="paper-title-corner">
+                                {{ hit._source.paper_title }}
+                            </div>
+                        {% endif %}
+
+                        {% if category == 'papers' %}
+                            <h4>{{ hit._source.title }}</h4>
+                            <p class="authors">
+                                <strong>Authors:</strong> {{ hit._source.authors }}
+                            </p>
+                            <p>{{ hit._source.abstract[:450] }}...</p>
+
+                        {% elif category == 'tables' %}
+                            <div class="mb-3">
+                                <span class="table-number">Table {{ hit._source.table_number }}</span>
+                                <span class="caption-text">{{ hit._source.caption }}</span>
+                            </div>
+                            <a href="/paper/{{ hit._source.paper_id }}?table={{ hit._source.table_number }}" class="btn-view-table">
+                                View table in document
+                            </a>
+
+                        {% elif category == 'figures' %}
+                            <h5>Figure from Paper ID: {{ hit._source.paper_id }}</h5>
+                            <p class="mb-2"><strong>Caption:</strong> {{ hit._source.caption }}</p>
+                            <img src="{{ hit._source.url }}" class="img-fluid" style="max-height: 300px; border: 1px solid #e2e8f0;" alt="Figure">
+                        {% endif %}
+
+                        <div class="relevance-score">
+                            Relevance: {{ hit._score }}
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="no-results">
+                    <h5>No results found</h5>
+                    <p>Try different keywords</p>
                 </div>
-            </div>
-        {% endfor %}
+            {% endif %}
+        </div>
     </div>
-
-    {% if not hits %}
-        <div class="alert alert-warning">Nessun risultato trovato. Prova con altre parole chiave.</div>
-    {% endif %}
 </body>
 </html>
