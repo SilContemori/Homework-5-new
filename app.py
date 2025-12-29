@@ -9,7 +9,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 es = Elasticsearch(
     config.HOST_ELASTIC,
     basic_auth=("elastic", config.PASSWORD_ELASTC),
-    verify_certs=False  # Necessario perché siamo in locale senza certificati veri
+    verify_certs=False
 )
 
 @app.route('/')
@@ -19,8 +19,8 @@ def index():
 @app.route('/search')
 def search():
     query = request.args.get('q')
-    category = request.args.get('category', 'papers') # Default: papers
-    
+    category = request.args.get('category', 'papers')
+
     if not query:
         return render_template('index.html')
 
@@ -47,8 +47,15 @@ def search():
 
     res = es.search(index=index_name, body=body)
     hits = res['hits']['hits']
-    
+
     return render_template('results.html', hits=hits, category=category, query=query)
+
+@app.route('/paper/<paper_id>')
+def view_paper(paper_id):
+    """Mostra l'HTML completo del paper"""
+    res = es.get(index="papers_index", id=paper_id)
+    paper = res['_source']
+    return render_template('paper.html', paper=paper)
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

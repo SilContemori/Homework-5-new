@@ -67,6 +67,7 @@ def extract_detailed_tables(json_file):
             # Salviamo il pacchetto completo richiesto dal Punto 4
             table_data = {
                 "paper_id": paper_id,
+                "paper_title": paper.get('title', ''),  # Titolo del paper
                 "table_index": i,
                 "caption": caption,
                 "body": body,

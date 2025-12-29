@@ -35,7 +35,9 @@ class TablesIndexer:
             "mappings": {
                 "properties": {
                     "paper_id": {"type": "keyword"},
+                    "paper_title": {"type": "text", "analyzer": "standard"},
                     "table_id": {"type": "keyword"},
+                    "table_number": {"type": "integer"},
                     "caption": {"type": "text", "analyzer": "standard"},
                     "body": {"type": "text", "analyzer": "standard"},
                     "mentions": {"type": "text", "analyzer": "standard"},
@@ -66,7 +68,9 @@ class TablesIndexer:
                 "_id": f"{table['paper_id']}_table_{table['table_index']}",
                 "_source": {
                     "paper_id": table["paper_id"],
+                    "paper_title": table.get("paper_title", ""),
                     "table_id": f"table_{table['table_index']}",
+                    "table_number": table['table_index'] + 1,
                     "caption": table.get("caption", ""),
                     "body": table.get("body", ""),
                     "mentions": table.get("mentions", []),

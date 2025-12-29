@@ -1,9 +1,11 @@
 import json
 from elasticsearch import Elasticsearch, helpers
 from loguru import logger
-
+import urllib3
 from config import config
 
+# Disabilita warning SSL (solo in locale)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class DocumentIndexer:
     def __init__(self):

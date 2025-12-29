@@ -1,9 +1,11 @@
 import time
 import requests
 import feedparser
+import re
 from urllib.parse import quote
 from typing import List
 from loguru import logger
+from bs4 import BeautifulSoup
 
 from corpus_builder.models import Paper
 from corpus_builder.source.base import DocumentSource
@@ -14,6 +16,41 @@ class ArxivSource(DocumentSource):
     API_URL = "http://export.arxiv.org/api/query"
     HEADERS = {"User-Agent": "AcademicSearchProject/1.0"}
     DELAY = 3
+
+    @staticmethod
+    def _preprocess_html(html: str, paper_id: str) -> str:
+        """
+        Preprocessa l'HTML per fixare immagini, formule e CSS.
+        """
+        soup = BeautifulSoup(html, 'lxml')
+
+        # 1. Fix immagini: converti path relativi in assoluti
+        for img in soup.find_all('img'):
+            src = img.get('src', '')
+            if src.startswith('/'):
+                img['src'] = f"https://ar5iv.org{src}"
+
+        # 2. Assicura che MathJax sia presente
+        mathjax_script = soup.find('script', src=re.compile(r'mathjax'))
+        if not mathjax_script:
+            # Inserisci MathJax nell'head
+            head = soup.find('head')
+            if head:
+                mathjax = soup.new_tag('script', src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js")
+                head.append(mathjax)
+
+        # 3. Fix altri link relativi (CSS, etc)
+        for link in soup.find_all('link', href=True):
+            href = link['href']
+            if href.startswith('/'):
+                link['href'] = f"https://ar5iv.org{href}"
+
+        for script in soup.find_all('script', src=True):
+            src = script['src']
+            if src.startswith('/'):
+                script['src'] = f"https://ar5iv.org{src}"
+
+        return str(soup)
 
     # def search(self, query: str) -> List[Paper]:
     #     try:
@@ -103,7 +140,8 @@ class ArxivSource(DocumentSource):
             elapsed = time.time() - start_ts
 
             if r.status_code == 200 and "<html" in r.text.lower():
-                paper.html_content = r.text
+                # Preprocessa l'HTML per fixare immagini, formule e CSS
+                paper.html_content = self._preprocess_html(r.text, paper.paper_id)
                 logger.debug(
                     "HTML fetch OK | paper_id={} | elapsed={:.2f}s",
                     paper.paper_id,

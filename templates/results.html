@@ -11,15 +11,22 @@
 
     <div class="list-group">
         {% for hit in hits %}
-            <div class="list-group-item mb-3 shadow-sm p-4">
+            <div class="list-group-item mb-3 shadow-sm p-4 position-relative">
+                {% if category == 'tables' or category == 'figures' %}
+                    <small class="position-absolute top-0 end-0 m-3 text-muted">
+                        {{ hit._source.paper_title }}
+                    </small>
+                {% endif %}
                 {% if category == 'papers' %}
                     <h4>{{ hit._source.title }}</h4>
                     <p><strong>Autori:</strong> {{ hit._source.authors }}</p>
                     <p class="text-muted">{{ hit._source.abstract[:300] }}...</p>
                 {% elif category == 'tables' %}
-                    <h5>Tabella da Paper ID: {{ hit._source.paper_id }}</h5>
-                    <p class="badge bg-info text-dark">Caption: {{ hit._source.caption }}</p>
-                    <pre class="bg-light p-2" style="font-size: 0.8rem;">{{ hit._source.body[:500] }}...</pre>
+                    <h5><strong>{{ hit._source.paper_title }}</strong></h5>
+                    <p class="mb-1"><strong>Tabella {{ hit._source.table_number }}:</strong> {{ hit._source.caption }}</p>
+                    <a href="/paper/{{ hit._source.paper_id }}" class="btn btn-primary btn-sm">
+                        Visualizza documento completo
+                    </a>
                 {% elif category == 'figures' %}
                     <h5>Figura da Paper ID: {{ hit._source.paper_id }}</h5>
                     <p><strong>Didascalia:</strong> {{ hit._source.caption }}</p>
