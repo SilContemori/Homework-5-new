@@ -84,9 +84,11 @@ class FiguresIndexer:
 
 
 if __name__ == "__main__":
+    import os
     # 1. connessione a elastic search
     indexer = FiguresIndexer()
     #2. creazione indice con una strutttura mapping ben definita (prendendo i paper dal file json)
     indexer.create_index(reset=True)
     # 3. indicizzazione delle immagini dentro elastic search
-    indexer.index_from_json("../figures_with_context.json")
+    json_path = os.path.join(os.path.dirname(__file__), "..", "figures_with_context.json")
+    indexer.index_from_json(json_path)

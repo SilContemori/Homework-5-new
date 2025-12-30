@@ -79,9 +79,10 @@ def extract_detailed_tables(json_file):
         logger.info(f"Paper {paper_id}: estratte {len(table_wrappers)} tabelle con contesto.")
 
     # Salviamo i risultati in un nuovo file JSON dedicato alle tabelle
-    with open("../tables_with_context.json", "w", encoding='utf-8') as f:
+    output_path = os.path.join(os.path.dirname(json_file), "tables_with_context.json")
+    with open(output_path, "w", encoding='utf-8') as f:
         json.dump(all_extracted_data, f, indent=4)
-    
+
     return len(all_extracted_data)
 
 if __name__ == "__main__":

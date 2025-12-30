@@ -85,9 +85,11 @@ class TablesIndexer:
 
 
 if __name__ == "__main__":
+    import os
     # 1. connessione a elastic search
     indexer = TablesIndexer()
     # 2. creazione indice con una strutttura mapping ben definita (prendendo i paper dal file json)
     indexer.create_index(reset=True)
     # 3. indicizzazione delle tabelle dentro elastic search
-    indexer.index_from_json("../tables_with_context.json")
+    json_path = os.path.join(os.path.dirname(__file__), "..", "tables_with_context.json")
+    indexer.index_from_json(json_path)

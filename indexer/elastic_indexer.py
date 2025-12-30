@@ -55,9 +55,11 @@ class DocumentIndexer:
         logger.info(f"Indicizzati correttamente {success} documenti su Elasticsearch.")
 
 if __name__ == "__main__":
+    import os
     #1. connessione a elastc seach
     indexer = DocumentIndexer()
     #2. creazione indice con una strutttura mapping ben definita (prendendo i paper dal file json)
     indexer.create_index()
     #3. indicizzazione dei file dentro elastic search
-    indexer.index_data("../corpus.json")
+    json_path = os.path.join(os.path.dirname(__file__), "..", "corpus.json")
+    indexer.index_data(json_path)

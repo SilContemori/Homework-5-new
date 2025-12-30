@@ -98,9 +98,10 @@ class FigureContextExtractor:
             logger.info(f"Paper {paper_id}: Analizzate {len(figure_wrappers)} figure con dati di contesto.")
 
         # Salvataggio del database strutturato in JSON
-        with open("../figures_with_context.json", "w", encoding='utf-8') as f:
+        output_path = os.path.join(os.path.dirname(self.json_file), "figures_with_context.json")
+        with open(output_path, "w", encoding='utf-8') as f:
             json.dump(all_figures_data, f, indent=4)
-        
+
         return len(all_figures_data)
 
 if __name__ == "__main__":
