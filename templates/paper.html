@@ -50,15 +50,63 @@
             color: #2d3748;
             font-size: 1.05rem;
         }
-        .paper-content table {
-            margin: 25px 0;
-            border-collapse: collapse;
-        }
         .paper-content img {
             max-width: 100%;
             height: auto;
             margin: 25px 0;
             border: 1px solid #e2e8f0;
+        }
+        /* Fix per formule MathJax */
+        .paper-content mjx-container {
+            margin: 15px 0;
+            overflow-x: auto;
+        }
+        /* Fix per algoritmi e codice */
+        .paper-content pre,
+        .paper-content code {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            padding: 15px;
+            overflow-x: auto;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+        .paper-content pre {
+            margin: 20px 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        /* Fix per tabelle - preserva stile originale */
+        .paper-content table {
+            margin: 25px 0;
+            border-collapse: collapse;
+            display: table;
+        }
+        .paper-content table td,
+        .paper-content table th {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+        }
+        /* Fix per figure */
+        .paper-content figure {
+            margin: 25px 0;
+            text-align: center;
+        }
+        .paper-content figure img {
+            display: inline-block;
+        }
+        .paper-content figure figcaption {
+            margin-top: 10px;
+            font-style: italic;
+            color: #718096;
+            font-size: 0.95rem;
+        }
+        /* Fix per SVG */
+        .paper-content svg {
+            max-width: 100%;
+            height: auto;
+            margin: 15px 0;
         }
         /* Highlight per la tabella target */
         .table-highlight {
