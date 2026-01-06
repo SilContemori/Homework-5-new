@@ -1,7 +1,7 @@
 import json
 from elasticsearch import Elasticsearch, helpers
 from loguru import logger
-from config import config
+from app.config.config import config
 import urllib3
 
 # Disabilita warning SSL (solo in locale)
@@ -11,11 +11,13 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 class TablesIndexer:
     def __init__(self, index_name="tables_index"):
         self.index_name = index_name
-        self.es = Elasticsearch(
-            config.HOST_ELASTIC,
-            basic_auth=("elastic", config.PASSWORD_ELASTC),
-            verify_certs=False
-        )
+        es_config = {
+            "hosts": [config.HOST_ELASTIC],
+            "verify_certs": False
+        }
+        if config.PASSWORD_ELASTIC:
+            es_config["basic_auth"] = ("elastic", config.PASSWORD_ELASTIC)
+        self.es = Elasticsearch(**es_config)
 
     def create_index(self, reset=False):
         """
@@ -62,19 +64,33 @@ class TablesIndexer:
             logger.warning("Nessuna tabella trovata nel file JSON.")
             return
 
+
+
         actions = [
             {
                 "_index": self.index_name,
-                "_id": f"{table['paper_id']}_table_{table['table_index']}",
+                "_id": f"{table['paper_id']}_table_{table['table_number']}",
                 "_source": {
                     "paper_id": table["paper_id"],
                     "paper_title": table.get("paper_title", ""),
-                    "table_id": f"table_{table['table_index']}",
-                    "table_number": table['table_index'] + 1,
+                    "table_id": f"table_{table['table_number']}",
+                    "table_number": table["table_number"],
                     "caption": table.get("caption", ""),
                     "body": table.get("body", ""),
                     "mentions": table.get("mentions", []),
                     "context_paragraphs": table.get("context_paragraphs", [])
+
+                    #
+                # "_id": f"{table['paper_id']}_table_{table['table_index']}",
+                # "_source": {
+                #     "paper_id": table["paper_id"],
+                #     "paper_title": table.get("paper_title", ""),
+                #     "table_id": f"table_{table['table_index']}",
+                #     "table_number": table['table_index'] + 1,
+                #     "caption": table.get("caption", ""),
+                #     "body": table.get("body", ""),
+                #     "mentions": table.get("mentions", []),
+                #     "context_paragraphs": table.get("context_paragraphs", [])
                 }
             }
             for table in tables
@@ -86,10 +102,11 @@ class TablesIndexer:
 
 if __name__ == "__main__":
     import os
-    # 1. connessione a elastic search
     indexer = TablesIndexer()
-    # 2. creazione indice con una strutttura mapping ben definita (prendendo i paper dal file json)
     indexer.create_index(reset=True)
-    # 3. indicizzazione delle tabelle dentro elastic search
-    json_path = os.path.join(os.path.dirname(__file__), "..", "tables_with_context.json")
+    json_path = os.path.join(
+        os.path.dirname(__file__),
+        "..", "..", "..",
+        "corpus.json"
+    )
     indexer.index_from_json(json_path)

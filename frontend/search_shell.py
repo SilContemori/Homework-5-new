@@ -1,6 +1,7 @@
 from elasticsearch import Elasticsearch
 from loguru import logger
 
+
 class SearchShell:
     def __init__(self):
         self.es = Elasticsearch(
@@ -20,7 +21,7 @@ class SearchShell:
                 }
             }
         }
-        
+
         # Eseguiamo la ricerca
         response = self.es.search(index=self.index_name, body=body)
         hits = response['hits']['hits']
@@ -29,7 +30,7 @@ class SearchShell:
             print(f"\nNESSUN RISULTATO TROVATO PER: {query_text}")
             return
 
-        print(f"\nTROVATI {len(hits)} RISULTATI:\n" + "="*50)
+        print(f"\nTROVATI {len(hits)} RISULTATI:\n" + "=" * 50)
         for hit in hits:
             source = hit['_source']
             print(f"ID: {source['paper_id']}")
@@ -37,6 +38,7 @@ class SearchShell:
             print(f"AUTORI: {', '.join(source['authors'])}")
             print(f"SCORE: {hit['_score']}")
             print("-" * 50)
+
 
 if __name__ == "__main__":
     shell = SearchShell()

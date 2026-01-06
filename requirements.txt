@@ -1,0 +1,12 @@
+beautifulsoup4>=4.12.0
+elasticsearch>=9.2.1
+fastapi>=0.115.0
+feedparser>=6.0.11
+jinja2>=3.1.4
+loguru>=0.7.3
+lxml>=6.0.2
+pydantic-settings>=2.6.0
+requests>=2.32.5
+tqdm>=4.66.0
+urllib3>=2.2.0
+uvicorn[standard]>=0.32.0

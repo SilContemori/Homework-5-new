@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import List
-from corpus_builder.models import Paper
+from app.business.corpus_builder.models import Paper
 
 
 class DocumentSource(ABC):

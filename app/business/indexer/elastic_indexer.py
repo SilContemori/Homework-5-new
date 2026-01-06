@@ -2,40 +2,47 @@ import json
 from elasticsearch import Elasticsearch, helpers
 from loguru import logger
 import urllib3
-from config import config
+from app.config.config import config
 
 # Disabilita warning SSL (solo in locale)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class DocumentIndexer:
     def __init__(self):
-        # Usiamo le tue credenziali scoperte prima
-        self.es = Elasticsearch(
-            config.HOST_ELASTIC,
-            basic_auth=("elastic", config.PASSWORD_ELASTC),
-            verify_certs=False  # Necessario perché siamo in locale senza certificati veri
-        )
+        es_config = {
+            "hosts": [config.HOST_ELASTIC],
+            "verify_certs": False
+        }
+        if config.PASSWORD_ELASTIC:
+            es_config["basic_auth"] = ("elastic", config.PASSWORD_ELASTIC)
+        self.es = Elasticsearch(**es_config)
         self.index_name = "papers_index"
 
-    def create_index(self):
+    def create_index(self, reset=False):
         """Crea la struttura (mapping) chiesta dal prof"""
+        if self.es.indices.exists(index=self.index_name):
+            if reset:
+                self.es.indices.delete(index=self.index_name)
+                logger.info(f"Indice '{self.index_name}' eliminato.")
+            else:
+                logger.info(f"Indice '{self.index_name}' esiste già.")
+                return
+
         mapping = {
             "mappings": {
                 "properties": {
                     "paper_id": {"type": "keyword"},
+                    "pmc_id": {"type": "keyword"},
                     "title": {"type": "text", "analyzer": "english"},
                     "authors": {"type": "text"},
                     "published": {"type": "date"},
                     "abstract": {"type": "text", "analyzer": "english"},
-                    "html_content": {"type": "text"} # Questo conterrà il testo completo
+                    "html_content": {"type": "text"} #
                 }
             }
         }
-        if not self.es.indices.exists(index=self.index_name):
-            self.es.indices.create(index=self.index_name, body=mapping)
-            logger.info(f"Indice '{self.index_name}' creato con successo.")
-        else:
-            logger.info(f"L'indice '{self.index_name}' esiste già.")
+        self.es.indices.create(index=self.index_name, body=mapping)
+        logger.success(f"Indice '{self.index_name}' creato.")
 
     def index_data(self, json_file):
         """Legge il file JSON e sposta tutto su Elasticsearch"""
@@ -45,21 +52,22 @@ class DocumentIndexer:
         actions = [
             {
                 "_index": self.index_name,
-                "_id": p['paper_id'],
+                "_id": p.get('pmc_id') or p.get('paper_id'),
                 "_source": p
             }
             for p in papers
         ]
 
         success, _ = helpers.bulk(self.es, actions)
-        logger.info(f"Indicizzati correttamente {success} documenti su Elasticsearch.")
+        logger.success(f"Indicizzati correttamente {success} documenti su Elasticsearch.")
 
 if __name__ == "__main__":
     import os
-    #1. connessione a elastc seach
     indexer = DocumentIndexer()
-    #2. creazione indice con una strutttura mapping ben definita (prendendo i paper dal file json)
-    indexer.create_index()
-    #3. indicizzazione dei file dentro elastic search
-    json_path = os.path.join(os.path.dirname(__file__), "..", "corpus.json")
+    indexer.create_index(reset=True)
+    json_path = os.path.join(
+        os.path.dirname(__file__),
+        "..", "..", "..",
+        "corpus.json"
+    )
     indexer.index_data(json_path)

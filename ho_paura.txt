@@ -1,0 +1,2 @@
+- la cartella frontend credo che sia obsoleta, però nel dubbio non ho cancellato nulla
+

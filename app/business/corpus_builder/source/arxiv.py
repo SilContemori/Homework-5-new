@@ -7,83 +7,86 @@ from typing import List
 from loguru import logger
 from bs4 import BeautifulSoup
 
-from corpus_builder.models import Paper
-from corpus_builder.source.base import DocumentSource
+from app.business.corpus_builder.models import Paper
+from app.business.corpus_builder.source.base import DocumentSource
+from app.config.config import config
 
 
 class ArxivSource(DocumentSource):
 
     API_URL = "http://export.arxiv.org/api/query"
-    HEADERS = {"User-Agent": "AcademicSearchProject/1.0"}
-    DELAY = 3
 
     @staticmethod
     def _preprocess_html(html: str, paper_id: str) -> str:
         """
-        Preprocessa l'HTML per fixare immagini, formule e CSS.
+        Preprocessa l'HTML per fixare immagini, formule, CSS e altri elementi.
         """
         soup = BeautifulSoup(html, 'lxml')
 
-        # 1. Fix immagini: converti path relativi in assoluti
+        for script in soup.find_all('script', src=True):
+            if 'mathjax' in script['src'].lower():
+                script.decompose()
+
+        head = soup.find('head')
+        if head:
+            mathjax_config = soup.new_tag('script')
+            mathjax_config.string = '''
+            window.MathJax = {
+                tex: {inlineMath: [['$', '$'], ['\\(', '\\)']]},
+                svg: {fontCache: 'global'}
+            };
+            '''
+            head.insert(0, mathjax_config)
+
+            # MathJax v3
+            mathjax = soup.new_tag(
+                'script',
+                src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js",
+                attrs={"async": "async"}
+            )
+            head.insert(1, mathjax)
+
         for img in soup.find_all('img'):
             src = img.get('src', '')
-            if src.startswith('/'):
-                img['src'] = f"https://ar5iv.org{src}"
+            if src and not src.startswith('http') and not src.startswith('//'):
+                if src.startswith('/'):
+                    img['src'] = f"https://ar5iv.org{src}"
+                else:
+                    img['src'] = f"https://ar5iv.org/html/{paper_id}/{src}"
 
-        # 2. Assicura che MathJax sia presente
-        mathjax_script = soup.find('script', src=re.compile(r'mathjax'))
-        if not mathjax_script:
-            # Inserisci MathJax nell'head
-            head = soup.find('head')
-            if head:
-                mathjax = soup.new_tag('script', src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js")
-                head.append(mathjax)
+            data_src = img.get('data-src', '')
+            if data_src and not data_src.startswith('http'):
+                if data_src.startswith('/'):
+                    img['data-src'] = f"https://ar5iv.org{data_src}"
+                else:
+                    img['data-src'] = f"https://ar5iv.org/html/{paper_id}/{data_src}"
 
-        # 3. Fix altri link relativi (CSS, etc)
         for link in soup.find_all('link', href=True):
             href = link['href']
-            if href.startswith('/'):
-                link['href'] = f"https://ar5iv.org{href}"
+            if not href.startswith('http') and not href.startswith('//'):
+                if href.startswith('/'):
+                    link['href'] = f"https://ar5iv.org{href}"
+                else:
+                    link['href'] = f"https://ar5iv.org/{href}"
 
         for script in soup.find_all('script', src=True):
             src = script['src']
-            if src.startswith('/'):
-                script['src'] = f"https://ar5iv.org{src}"
+            if not src.startswith('http') and not src.startswith('//'):
+                if src.startswith('/'):
+                    script['src'] = f"https://ar5iv.org{src}"
+                else:
+                    script['src'] = f"https://ar5iv.org/{src}"
+
+        for svg in soup.find_all('svg'):
+            for svg_img in svg.find_all('image', href=True):
+                href = svg_img['href']
+                if not href.startswith('http') and not href.startswith('//'):
+                    if href.startswith('/'):
+                        svg_img['href'] = f"https://ar5iv.org{href}"
+                    else:
+                        svg_img['href'] = f"https://ar5iv.org/html/{paper_id}/{href}"
 
         return str(soup)
-
-    # def search(self, query: str) -> List[Paper]:
-    #     try:
-    #         encoded_query = quote(query)
-    #         url = f"{self.API_URL}?search_query={encoded_query}&start=0"
-    #         logger.debug(f"Search {url}")
-    #         response = requests.get(url, headers=self.HEADERS, timeout=30)
-    #         response.raise_for_status()
-    #
-    #         feed = feedparser.parse(response.text)
-    #
-    #         papers = []
-    #         for entry in feed.entries:
-    #             arxiv_id = entry.id.split("/abs/")[1]
-    #
-    #             papers.append(
-    #                 Paper(
-    #                     paper_id=arxiv_id,
-    #                     title=entry.title.strip(),
-    #                     authors=[a.name for a in entry.authors],
-    #                     abstract=entry.summary.strip(),
-    #                     published=getattr(entry, "published", None),
-    #                     updated=getattr(entry, "updated", None),
-    #                     html_url=f"https://ar5iv.org/html/{arxiv_id}",
-    #                     pdf_url=f"https://arxiv.org/pdf/{arxiv_id}.pdf"
-    #                 )
-    #             )
-    #
-    #         return papers
-    #
-    #     except Exception as e:
-    #         print(f"Errore durante il fetch da arXiv: {e}")
-    #         return []
 
     def search(self, query: str) -> List[Paper]:
         """
@@ -91,11 +94,11 @@ class ArxivSource(DocumentSource):
         """
         papers = []
         start = 0
-        batch_size = 200  # massimo consigliato da arXiv
+        batch_size = 200
         while True:
             encoded_query = quote(query)
             url = f"{self.API_URL}?search_query={encoded_query}&start={start}&max_results={batch_size}"
-            response = requests.get(url, headers=self.HEADERS, timeout=30)
+            response = requests.get(url, headers=config.HEADERS, timeout=30)
             response.raise_for_status()
             feed = feedparser.parse(response.text)
             if not feed.entries:
@@ -116,7 +119,7 @@ class ArxivSource(DocumentSource):
                     )
                 )
             start += batch_size
-            time.sleep(self.DELAY)  # per non essere bannati
+            time.sleep(config.DELAY)
 
         return papers
 
@@ -136,7 +139,7 @@ class ArxivSource(DocumentSource):
 
         try:
             start_ts = time.time()
-            r = requests.get(paper.html_url, headers=self.HEADERS, timeout=20)
+            r = requests.get(paper.html_url, headers=config.HEADERS, timeout=20)
             elapsed = time.time() - start_ts
 
             if r.status_code == 200 and "<html" in r.text.lower():
@@ -165,6 +168,6 @@ class ArxivSource(DocumentSource):
 
         logger.debug(
             "Sleeping after fetch | seconds={}",
-            self.DELAY
+            config.DELAY
         )
-        time.sleep(self.DELAY)
+        time.sleep(config.DELAY)

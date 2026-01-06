@@ -13,3 +13,5 @@ class Paper:
     html_url: Optional[str]
     pdf_url: Optional[str]
     html_content: Optional[str] = None
+    pmc_id: Optional[str] = None
+    doi: Optional[str] = None

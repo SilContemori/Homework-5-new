@@ -1,6 +1,6 @@
 from typing import List
-from corpus_builder.models import Paper
-from corpus_builder.source.base import DocumentSource
+from app.business.corpus_builder.models import Paper
+from app.business.corpus_builder.source.base import DocumentSource
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 import time

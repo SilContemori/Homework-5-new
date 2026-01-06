@@ -4,348 +4,329 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ paper.title }}</title>
+
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+
     <style>
         body {
             background: #f5f5f5;
             font-family: 'Georgia', 'Times New Roman', serif;
             padding: 30px 0;
         }
+
         .paper-container {
             background: white;
             border-radius: 8px;
             padding: 50px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             max-width: 1000px;
             margin: 0 auto;
             border-top: 4px solid #c53030;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
+
         .back-btn {
             color: #c53030;
             text-decoration: none;
             font-weight: 600;
-            display: inline-block;
             margin-bottom: 25px;
-            transition: color 0.2s;
+            display: inline-block;
         }
+
         .back-btn:hover {
             color: #9b2c2c;
             text-decoration: underline;
         }
+
         h1 {
-            color: #1a202c;
-            font-weight: 600;
             font-size: 1.8rem;
             margin-bottom: 15px;
-            line-height: 1.4;
         }
+
         .authors {
-            color: #718096;
-            font-size: 1rem;
-            margin-bottom: 30px;
             font-style: italic;
+            color: #718096;
+            margin-bottom: 30px;
         }
+
         .paper-content {
+            font-size: 1.05rem;
             line-height: 1.8;
             color: #2d3748;
-            font-size: 1.05rem;
         }
-        .paper-content table {
-            margin: 25px 0;
-            border-collapse: collapse;
-        }
-        .paper-content img {
+
+        .paper-content img,
+        .paper-content svg {
             max-width: 100%;
             height: auto;
+            margin: 20px 0;
+        }
+
+        .paper-content table {
+            display: block;
+            width: max-content;
+            max-width: 100%;
             margin: 25px 0;
-            border: 1px solid #e2e8f0;
+            border-collapse: collapse;
+            overflow-x: auto;
         }
-        /* Highlight per la tabella target */
+
+        .paper-content table th,
+        .paper-content table td {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            vertical-align: top;
+            white-space: nowrap;
+        }
+
+        .paper-content table th:first-child,
+        .paper-content table td:first-child {
+            white-space: normal;
+            min-width: 120px;
+        }
+
         .table-highlight {
-            border: 3px solid #c53030 !important;
-            border-radius: 4px;
-            padding: 20px;
+            outline: 3px solid #c53030;
+            outline-offset: 6px;
             background: #fff5f5;
-            box-shadow: 0 2px 8px rgba(197, 48, 48, 0.2);
-            transition: all 0.3s;
         }
-        /* Highlight per la figura target */
+
         .figure-highlight {
-            border: 3px solid #c53030 !important;
-            border-radius: 4px;
-            padding: 20px;
+            outline: 3px solid #c53030;
+            outline-offset: 6px;
             background: #fff5f5;
-            box-shadow: 0 2px 8px rgba(197, 48, 48, 0.2);
-            transition: all 0.3s;
         }
-        /* Highlight per la query nel testo */
+
         .query-highlight {
-            background: linear-gradient(120deg, #fff5f5 0%, #fed7d7 100%);
+            background: linear-gradient(120deg, #fff5f5, #fed7d7);
             padding: 2px 4px;
             border-radius: 3px;
-            font-weight: 500;
         }
+
         .table-indicator {
             background: #c53030;
             color: white;
-            padding: 12px 25px;
-            border-radius: 4px;
-            margin: 25px 0;
-            font-weight: 600;
-            font-size: 0.95rem;
+            padding: 12px 20px;
+            margin: 20px 0;
             text-align: center;
+            border-radius: 4px;
+            font-weight: 600;
         }
+
         .table-indicator.warning {
             background: #e53e3e;
         }
-        /* Nascondi il footer di ar5iv */
+
         footer, .footer, [class*="footer"], [id*="footer"] {
             display: none !important;
         }
+
         hr {
-            border-color: #e2e8f0;
             margin: 30px 0;
+            border-color: #e2e8f0;
         }
     </style>
 </head>
+
 <body>
-    <div class="container">
-        <div class="paper-container">
-            <a href="/" class="back-btn">← Back to search</a>
+<div class="container">
+    <div class="paper-container">
 
-            <h1>{{ paper.title }}</h1>
-            <p class="authors">{{ paper.authors }}</p>
+        <a id="smart-back-btn" href="/" class="back-btn">← Back to search</a>
 
-            {% if table_number %}
-                <div class="table-indicator" id="tableIndicator">
-                    Navigating to Table {{ table_number }}
-                </div>
-            {% elif figure_id %}
-                <div class="table-indicator" id="figureIndicator">
-                    Navigating to Figure {{ figure_id }}
-                </div>
-            {% elif query %}
-                <div class="table-indicator" id="queryIndicator">
-                    Highlighting: "{{ query }}"
-                </div>
+        <h1>{{ paper.title }}</h1>
+
+        <p class="authors">
+            {% if paper.authors %}
+                {% if paper.authors is string %}
+                    {{ paper.authors }}
+                {% else %}
+                    {{ paper.authors | join(', ') }}
+                {% endif %}
+            {% else %}
+                No authors listed
             {% endif %}
+        </p>
 
-            <hr>
-
-            <div class="paper-content" id="paperContent">
-                {{ paper.html_content|safe }}
+        {% if table_number %}
+            <div class="table-indicator" id="tableIndicator">
+                Navigating to Table {{ table_number }}
             </div>
+        {% elif figure_id %}
+            <div class="table-indicator" id="figureIndicator">
+                Navigating to Figure {{ figure_id }}
+            </div>
+        {% elif query %}
+            <div class="table-indicator" id="queryIndicator">
+                Highlighting: "{{ query }}"
+            </div>
+        {% endif %}
+
+        <hr>
+
+        <div class="paper-content" id="paperContent">
+            {{ paper.html_content | safe }}
         </div>
+
     </div>
+</div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const tableNumber = urlParams.get('table');
-            const figureId = urlParams.get('figure');
-            const query = urlParams.get('query');
+<script>
+document.addEventListener('DOMContentLoaded', function () {
 
-            if (tableNumber) {
-                scrollToTable(parseInt(tableNumber));
-            } else if (figureId) {
-                scrollToFigure(figureId);
-            } else if (query) {
-                highlightQuery(query);
-            }
+    const params = new URLSearchParams(window.location.search);
+    const tableNumber = params.get('table');
+    const figureId = params.get('figure');
+    const query = params.get('query');
+
+    if (query) {
+        document.getElementById('smart-back-btn').onclick = e => {
+            e.preventDefault();
+            history.back();
+        };
+    }
+
+    function scrollToTarget(target) {
+        const rect = target.getBoundingClientRect();
+
+        const top =
+            rect.top + window.pageYOffset - 100;
+
+        const left =
+            rect.left + window.pageXOffset
+            - window.innerWidth / 2
+            + rect.width / 2;
+
+        window.scrollTo({
+            top,
+            left: Math.max(left, 0),
+            behavior: 'smooth'
+        });
+    }
+
+
+    function scrollToTable(targetNumber) {
+        const content = document.querySelector('.paper-content');
+        if (!content) return;
+
+        const tableRegex = /ltx_table|tbl|ltx-table/i;
+        const candidates = Array.from(
+            content.querySelectorAll('figure, div, table')
+        );
+
+        let wrappers = [];
+
+        candidates.forEach(el => {
+            const cls = el.className || '';
+            if (tableRegex.test(cls)) wrappers.push(el);
         });
 
-        function scrollToTable(targetNumber) {
-            const tables = document.querySelectorAll('.paper-content table');
-            const figures = document.querySelectorAll('.paper-content figure');
+        content.querySelectorAll('table').forEach(table => {
+            let parent = table.parentElement;
+            let found = false;
 
-            let targetElement = null;
-            let foundCount = 0;
-
-            // Cerca tra le tabelle
-            for (let table of tables) {
-                let wrapper = table.closest('figure, div[class*="table"], div[class*="Table"]');
-                if (!wrapper) {
-                    wrapper = table;
-                }
-
-                foundCount++;
-
-                if (foundCount === targetNumber) {
-                    targetElement = wrapper;
+            while (parent && parent !== content) {
+                if (wrappers.includes(parent)) {
+                    found = true;
                     break;
                 }
+                parent = parent.parentElement;
             }
+            if (!found) wrappers.push(table);
+        });
 
-            // Se non trovata tra le tabelle, cerca tra le figure
-            if (!targetElement) {
-                foundCount = 0;
-                for (let figure of figures) {
-                    if (figure.querySelector('table')) {
-                        foundCount++;
-                        if (foundCount === targetNumber) {
-                            targetElement = figure;
-                            break;
-                        }
-                    }
-                }
-            }
+        wrappers = [...new Set(wrappers)].sort((a, b) =>
+            a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1
+        );
 
-            if (targetElement) {
-                targetElement.classList.add('table-highlight');
+        const validTables = [];
 
-                const elementPosition = targetElement.getBoundingClientRect().top;
-                const offsetPosition = elementPosition + window.pageYOffset - 100;
+        wrappers.forEach(wrapper => {
+            const table =
+                wrapper.tagName === 'TABLE'
+                    ? wrapper
+                    : wrapper.querySelector('table');
 
-                window.scrollTo({
-                    top: offsetPosition,
-                    behavior: 'smooth'
-                });
+            if (!table) return;
 
-                // Rimuovi l'indicatore dopo 4 secondi
-                setTimeout(function() {
-                    const indicator = document.getElementById('tableIndicator');
-                    if (indicator) {
-                        indicator.style.transition = 'opacity 0.5s';
-                        indicator.style.opacity = '0';
-                        setTimeout(() => indicator.remove(), 500);
-                    }
-                }, 4000);
-            } else {
-                console.warn('Table ' + targetNumber + ' not found');
-                const indicator = document.getElementById('tableIndicator');
-                if (indicator) {
-                    indicator.textContent = 'Table ' + targetNumber + ' not found. Showing full document.';
-                    indicator.classList.add('warning');
-                }
-            }
-        }
+            const classes = (wrapper.className + ' ' + table.className).toLowerCase();
+            if (/(eqn|math|matrix)/.test(classes)) return;
 
-        function scrollToFigure(targetFigureId) {
-            // Estrai il numero dal figure_id (es. "fig_0" -> 0, "fig_1" -> 1)
-            const figureIndex = parseInt(targetFigureId.replace('fig_', ''));
+            const rows = table.querySelectorAll('tr');
+            const cells = table.querySelectorAll('td, th');
 
-            // Trova tutte le figure nel documento
-            const figures = document.querySelectorAll('.paper-content figure, .paper-content div[class*="figure"], .paper-content div[class*="Figure"]');
+            if (rows.length < 2 || cells.length < 4) return;
 
-            // Filtra solo le figure che contengono immagini
-            const validFigures = [];
-            for (let fig of figures) {
-                if (fig.querySelector('img')) {
-                    validFigures.push(fig);
-                }
-            }
+            const words = (table.textContent || '').match(/\b[a-zA-Z]{4,}\b/g);
+            if (!words || words.length < 3) return;
 
-            // Se non ci sono abbastanza figure valide, cerca anche le immagini dirette
-            if (figureIndex >= validFigures.length) {
-                const images = document.querySelectorAll('.paper-content img');
-                if (figureIndex < images.length) {
-                    const img = images[figureIndex];
-                    const wrapper = img.closest('figure, div[class*="figure"], div[class*="Figure"]');
-                    if (wrapper) {
-                        wrapper.classList.add('figure-highlight');
-                        scrollToElement(wrapper);
-                        return;
-                    }
-                }
-            }
+            validTables.push(wrapper);
+        });
 
-            // Trova la figura all'indice specificato
-            if (figureIndex < validFigures.length) {
-                const targetElement = validFigures[figureIndex];
-                targetElement.classList.add('figure-highlight');
-                scrollToElement(targetElement);
+        const index = targetNumber - 1;
 
-                // Rimuovi l'indicatore dopo 4 secondi
-                setTimeout(function() {
-                    const indicator = document.getElementById('figureIndicator');
-                    if (indicator) {
-                        indicator.style.transition = 'opacity 0.5s';
-                        indicator.style.opacity = '0';
-                        setTimeout(() => indicator.remove(), 500);
-                    }
-                }, 4000);
-            } else {
-                console.warn('Figure ' + targetFigureId + ' (index ' + figureIndex + ') not found');
-                const indicator = document.getElementById('figureIndicator');
-                if (indicator) {
-                    indicator.textContent = 'Figure ' + targetFigureId + ' not found. Showing full document.';
-                    indicator.classList.add('warning');
-                }
+        if (index >= 0 && index < validTables.length) {
+            const target = validTables[index];
+            target.classList.add('table-highlight');
+            scrollToTarget(target);
+
+            setTimeout(() => {
+                document.getElementById('tableIndicator')?.remove();
+            }, 4000);
+        } else {
+            const ind = document.getElementById('tableIndicator');
+            if (ind) {
+                ind.textContent =
+                    `Table ${targetNumber} not found (Max: ${validTables.length})`;
+                ind.classList.add('warning');
             }
         }
+    }
 
-        function scrollToElement(element) {
-            const elementPosition = element.getBoundingClientRect().top;
-            const offsetPosition = elementPosition + window.pageYOffset - 100;
+    function scrollToFigure(id) {
+        const idx = parseInt(id.replace('fig_', ''));
+        const figs = [...document.querySelectorAll('.paper-content figure')]
+            .filter(f => f.querySelector('img'));
 
-            window.scrollTo({
-                top: offsetPosition,
-                behavior: 'smooth'
-            });
-        }
+        if (idx < figs.length) {
+            const target = figs[idx];
+            target.classList.add('figure-highlight');
+            scrollToTarget(target);
 
-        function highlightQuery(queryText) {
-            const paperContent = document.getElementById('paperContent');
-
-            // Funzione helper per attraversare e modificare i nodi di testo
-            function highlightInElement(element) {
-                const walker = document.createTreeWalker(
-                    element,
-                    NodeFilter.SHOW_TEXT,
-                    {
-                        acceptNode: function(node) {
-                            // Ignora nodi dentro script, style, o già highlightati
-                            if (node.parentElement.tagName === 'SCRIPT' ||
-                                node.parentElement.tagName === 'STYLE' ||
-                                node.parentElement.classList.contains('query-highlight')) {
-                                return NodeFilter.FILTER_REJECT;
-                            }
-                            // Accetta solo nodi che contengono la query
-                            if (node.textContent.toLowerCase().includes(queryText.toLowerCase())) {
-                                return NodeFilter.FILTER_ACCEPT;
-                            }
-                            return NodeFilter.FILTER_REJECT;
-                        }
-                    }
-                );
-
-                const textNodes = [];
-                let node;
-                while (node = walker.nextNode()) {
-                    textNodes.push(node);
-                }
-
-                // Evidenzia ogni nodo di testo trovato
-                textNodes.forEach(function(textNode) {
-                    const text = textNode.textContent;
-                    const regex = new RegExp(`(${escapeRegExp(queryText)})`, 'gi');
-                    const newHTML = text.replace(regex, '<span class="query-highlight">$1</span>');
-
-                    if (newHTML !== text) {
-                        const span = document.createElement('span');
-                        span.innerHTML = newHTML;
-                        textNode.parentNode.replaceChild(span, textNode);
-                    }
-                });
-            }
-
-            function escapeRegExp(string) {
-                return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            }
-
-            // Esegui l'evidenziazione
-            highlightInElement(paperContent);
-
-            // Rimuovi l'indicatore dopo 4 secondi
-            setTimeout(function() {
-                const indicator = document.getElementById('queryIndicator');
-                if (indicator) {
-                    indicator.style.transition = 'opacity 0.5s';
-                    indicator.style.opacity = '0';
-                    setTimeout(() => indicator.remove(), 500);
-                }
+            setTimeout(() => {
+                document.getElementById('figureIndicator')?.remove();
             }, 4000);
         }
-    </script>
+    }
+
+
+    function highlightQuery(text) {
+        const root = document.getElementById('paperContent');
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+
+        let node;
+        const regex = new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+
+        while (node = walker.nextNode()) {
+            if (!node.parentElement || node.parentElement.classList.contains('query-highlight')) continue;
+            if (!regex.test(node.textContent)) continue;
+
+            const span = document.createElement('span');
+            span.innerHTML = node.textContent.replace(regex, '<span class="query-highlight">$&</span>');
+            node.parentNode.replaceChild(span, node);
+        }
+
+        setTimeout(() => {
+            document.getElementById('queryIndicator')?.remove();
+        }, 4000);
+    }
+
+
+    if (tableNumber) scrollToTable(parseInt(tableNumber));
+    else if (figureId) scrollToFigure(figureId);
+    else if (query) highlightQuery(query);
+
+});
+</script>
+
 </body>
 </html>

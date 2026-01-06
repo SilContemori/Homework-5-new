@@ -80,12 +80,6 @@
             line-height: 1.4;
             display: block;
         }
-        .item-label {
-            font-weight: 600;
-            font-size: 1.1rem;
-            color: #1a202c;
-            margin-right: 8px;
-        }
         .caption-section {
             margin: 15px 0;
             padding: 15px;
@@ -198,9 +192,8 @@
                             <p><strong>Authors:</strong> {{ hit._source.authors }}</p>
                             <p>{{ hit._source.abstract[:450] }}...</p>
 
-                            <!-- Action Button -->
                             <div class="card-actions">
-                                <a href="/paper/{{ hit._id }}?query={{ query }}"
+                                <a href="/paper/{{ hit._source.paper_id or hit._id }}?query={{ query }}&category={{ category }}"
                                    class="btn-action">
                                     View in document →
                                 </a>
@@ -209,13 +202,11 @@
                         </div>
 
                     {% elif category == 'tables' %}
-                        <!-- Paper Title -->
                         <div class="paper-title-section">
                             <strong>Paper</strong>
                             <span class="title-text">{{ hit._source.paper_title }}</span>
                         </div>
 
-                        <!-- Table Number and Caption -->
                         <div class="caption-section">
                             {% set clean_caption = hit._source.caption.replace('Table ' + hit._source.table_number|string + '.', '').replace('Table ' + hit._source.table_number|string, '')|trim %}
                             {% if clean_caption %}
@@ -223,9 +214,8 @@
                             {% endif %}
                         </div>
 
-                        <!-- Action Button -->
                         <div class="card-actions">
-                            <a href="/paper/{{ hit._source.paper_id }}?table={{ hit._source.table_number }}"
+                            <a href="/paper/{{ hit._source.paper_id or hit._id }}?table={{ hit._source.table_number }}&query={{ query }}&category={{ category }}"
                                class="btn-action">
                                 View in document →
                             </a>
@@ -233,25 +223,21 @@
                         </div>
 
                     {% elif category == 'figures' %}
-                        <!-- Paper Title -->
                         <div class="paper-title-section">
                             <strong>Paper</strong>
                             <span class="title-text">{{ hit._source.paper_title }}</span>
                         </div>
 
-                        <!-- Caption -->
                         <div class="caption-section">
                             <strong class="caption-text">{{ hit._source.caption }}</strong>
                         </div>
 
-                        <!-- Figure Image -->
                         <img src="{{ hit._source.url }}"
                              class="figure-image"
                              alt="Figure">
 
-                        <!-- Action Button -->
                         <div class="card-actions">
-                            <a href="/paper/{{ hit._source.paper_id }}?figure={{ hit._source.figure_id }}"
+                            <a href="/paper/{{ hit._source.paper_id or hit._id }}?figure={{ hit._source.figure_id }}&query={{ query }}&category={{ category }}"
                                class="btn-action">
                                 View in document →
                             </a>

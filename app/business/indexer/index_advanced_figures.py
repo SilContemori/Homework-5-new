@@ -2,7 +2,7 @@ import json
 from elasticsearch import Elasticsearch, helpers
 from loguru import logger
 import urllib3
-from config import config
+from app.config.config import config
 
 # Disabilita warning SSL (solo in locale)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -11,11 +11,13 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 class FiguresIndexer:
     def __init__(self, index_name="figures_index"):
         self.index_name = index_name
-        self.es = Elasticsearch(
-            config.HOST_ELASTIC,
-            basic_auth=("elastic", config.PASSWORD_ELASTC),
-            verify_certs=False  # Necessario perché siamo in locale senza certificati veri
-        )
+        es_config = {
+            "hosts": [config.HOST_ELASTIC],
+            "verify_certs": False
+        }
+        if config.PASSWORD_ELASTIC:
+            es_config["basic_auth"] = ("elastic", config.PASSWORD_ELASTIC)
+        self.es = Elasticsearch(**es_config)
 
     def create_index(self, reset=False):
         """
@@ -62,33 +64,36 @@ class FiguresIndexer:
             logger.warning("Nessuna figura trovata nel JSON.")
             return
 
-        actions = [
-            {
+        actions = []
+        for fig in figures:
+            link_id = fig.get("pmc_id") or fig.get("paper_id")
+
+            actions.append({
                 "_index": self.index_name,
-                "_id": f"{fig['paper_id']}_{fig['figure_id']}",
+                "_id": f"{fig.get('paper_id', fig.get('pmc_id', 'unk'))}_{fig['figure_id']}",
                 "_source": {
                     "url": fig["url"],
-                    "paper_id": fig["paper_id"],
+                    "paper_id": link_id,
                     "paper_title": fig.get("paper_title", ""),
                     "figure_id": fig["figure_id"],
                     "caption": fig["caption"],
                     "mentions": fig["mentions"],
-                    "context_paragraphs": fig.get("context_paragraphs", [])
+                    "context_paragraphs": fig.get("context_paragraphs", []),
+                    "pmc_id": fig.get("pmc_id"),
+                    "pmid": fig.get("paper_id")
                 }
-            }
-            for fig in figures
-        ]
+            })
 
         success, _ = helpers.bulk(self.es, actions)
         logger.success(f"Indicizzate correttamente {success} figure.")
 
-
 if __name__ == "__main__":
     import os
-    # 1. connessione a elastic search
     indexer = FiguresIndexer()
-    #2. creazione indice con una strutttura mapping ben definita (prendendo i paper dal file json)
     indexer.create_index(reset=True)
-    # 3. indicizzazione delle immagini dentro elastic search
-    json_path = os.path.join(os.path.dirname(__file__), "..", "figures_with_context.json")
+    json_path = os.path.join(
+        os.path.dirname(__file__),
+        "..", "..", "..",
+        "corpus.json"
+    )
     indexer.index_from_json(json_path)
