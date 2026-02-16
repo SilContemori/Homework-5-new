@@ -298,7 +298,8 @@ async def index(request: Request):
 async def search(
         request: Request,
         q: str = Query(None),
-        category: str = Query('papers')
+        category: str = Query('papers'),
+        mode: str = Query('fulltext')
 ):
     if not q:
         return templates.TemplateResponse('index.html', {'request': request})
@@ -313,16 +314,28 @@ async def search(
         index_name = "figures_index"
         search_fields = ["caption^3", "mentions", "context_paragraphs"]
 
-    body = {
-        "query": {
-            "multi_match": {
-                "query": q,
-                "fields": search_fields,
-                "type": "best_fields"
-            }
-        },
-        "size": 20
-    }
+    if mode == "boolean":
+        body = {
+            "query": {
+                "simple_query_string": {
+                    "query": q,
+                    "fields": search_fields,
+                    "default_operator": "AND"
+                }
+            },
+            "size": 20
+        }
+    else:
+        body = {
+            "query": {
+                "multi_match": {
+                    "query": q,
+                    "fields": search_fields,
+                    "type": "best_fields"
+                }
+            },
+            "size": 20
+        }
 
     try:
         es = get_elasticsearch()

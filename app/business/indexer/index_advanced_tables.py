@@ -79,18 +79,6 @@ class TablesIndexer:
                     "body": table.get("body", ""),
                     "mentions": table.get("mentions", []),
                     "context_paragraphs": table.get("context_paragraphs", [])
-
-                    #
-                # "_id": f"{table['paper_id']}_table_{table['table_index']}",
-                # "_source": {
-                #     "paper_id": table["paper_id"],
-                #     "paper_title": table.get("paper_title", ""),
-                #     "table_id": f"table_{table['table_index']}",
-                #     "table_number": table['table_index'] + 1,
-                #     "caption": table.get("caption", ""),
-                #     "body": table.get("body", ""),
-                #     "mentions": table.get("mentions", []),
-                #     "context_paragraphs": table.get("context_paragraphs", [])
                 }
             }
             for table in tables
@@ -107,6 +95,6 @@ if __name__ == "__main__":
     json_path = os.path.join(
         os.path.dirname(__file__),
         "..", "..", "..",
-        "corpus.json"
+        "tables_with_context.json"
     )
     indexer.index_from_json(json_path)

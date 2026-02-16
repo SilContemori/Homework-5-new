@@ -220,3 +220,14 @@ corpus.json
 figures_with_context.json
 tables_with_context.json
 app/test
+CLAUDE.md
+.DS_Store
+RELAZIONE_TECNICA.md
+
+# Vecchie directory (struttura precedente, ora in app/business/)
+/corpus_builder/
+/extractor/
+/indexer/
+
+# Risultati esperimenti (generati dallo script)
+experiments/evaluation_results.json

@@ -94,7 +94,7 @@
             </div>
 
             <div class="row g-3">
-                <div class="col-md-8">
+                <div class="col-md-5">
                     <select name="category" class="form-select form-select-lg">
                         <option value="papers">Documents</option>
                         <option value="tables">Tables</option>
@@ -102,11 +102,20 @@
                     </select>
                 </div>
                 <div class="col-md-4">
+                    <select name="mode" class="form-select form-select-lg">
+                        <option value="fulltext">Full-text</option>
+                        <option value="boolean">Boolean (AND, OR, NOT)</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
                     <button type="submit" class="btn btn-search w-100">
                         Search
                     </button>
                 </div>
             </div>
+            <p class="info-text text-center" style="margin-top: 15px; padding-top: 10px; border-top: none; font-size: 0.8rem;">
+                Boolean mode: use AND, OR, NOT, "exact phrase", (grouping)
+            </p>
         </form>
 
         <p class="info-text text-center">

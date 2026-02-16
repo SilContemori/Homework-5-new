@@ -39,6 +39,7 @@ class FiguresIndexer:
                     "url": {"type": "keyword"},
                     "paper_id": {"type": "keyword"},
                     "paper_title": {"type": "text", "analyzer": "standard"},
+                    "table_id": {"type": "keyword"},
                     "figure_id": {"type": "keyword"},
                     "caption": {"type": "text", "analyzer": "standard"},
                     "mentions": {"type": "text", "analyzer": "standard"},
@@ -75,6 +76,7 @@ class FiguresIndexer:
                     "url": fig["url"],
                     "paper_id": link_id,
                     "paper_title": fig.get("paper_title", ""),
+                    "table_id": fig["figure_id"],
                     "figure_id": fig["figure_id"],
                     "caption": fig["caption"],
                     "mentions": fig["mentions"],
@@ -94,6 +96,6 @@ if __name__ == "__main__":
     json_path = os.path.join(
         os.path.dirname(__file__),
         "..", "..", "..",
-        "corpus.json"
+        "figures_with_context.json"
     )
     indexer.index_from_json(json_path)

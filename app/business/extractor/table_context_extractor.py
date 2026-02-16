@@ -214,5 +214,5 @@ if __name__ == "__main__":
         "corpus.json"
     )
     num = extract_detailed_tables(json_path)
-    print(f"\nOPERAZIONE COMPLETATA: Estratte {num} figure complete di contesto.")
-    print("I dati sono pronti nel file 'figures_with_context.json' per essere indicizzati.")
+    print(f"\nOPERAZIONE COMPLETATA: Estratte {num} tabelle complete di contesto.")
+    print("I dati sono pronti nel file 'tables_with_context.json' per essere indicizzati.")
