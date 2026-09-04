@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ paper.title }}</title>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+
+    <style>
+        body {
+            background: #f5f5f5;
+            font-family: 'Georgia', 'Times New Roman', serif;
+            padding: 30px 0;
+        }
+
+        .paper-container {
+            background: white;
+            border-radius: 8px;
+            padding: 50px;
+            max-width: 1000px;
+            margin: 0 auto;
+            border-top: 4px solid #c53030;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .back-btn {
+            color: #c53030;
+            text-decoration: none;
+            font-weight: 600;
+            margin-bottom: 25px;
+            display: inline-block;
+        }
+
+        .back-btn:hover {
+            color: #9b2c2c;
+            text-decoration: underline;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            margin-bottom: 15px;
+        }
+
+        .authors {
+            font-style: italic;
+            color: #718096;
+            margin-bottom: 30px;
+        }
+
+        .paper-content {
+            font-size: 1.05rem;
+            line-height: 1.8;
+            color: #2d3748;
+        }
+
+        .paper-content img,
+        .paper-content svg {
+            max-width: 100%;
+            height: auto;
+            margin: 20px 0;
+        }
+
+        .paper-content table {
+            display: block;
+            width: max-content;
+            max-width: 100%;
+            margin: 25px 0;
+            border-collapse: collapse;
+            overflow-x: auto;
+        }
+
+        .paper-content table th,
+        .paper-content table td {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            vertical-align: top;
+            white-space: nowrap;
+        }
+
+        .paper-content table th:first-child,
+        .paper-content table td:first-child {
+            white-space: normal;
+            min-width: 120px;
+        }
+
+        .table-highlight {
+            outline: 3px solid #c53030;
+            outline-offset: 6px;
+            background: #fff5f5;
+        }
+
+        .figure-highlight {
+            outline: 3px solid #c53030;
+            outline-offset: 6px;
+            background: #fff5f5;
+        }
+
+        .query-highlight {
+            background-color: #ffcccc;
+            color: #9b2c2c;
+            border: 1px solid #e53e3e;
+            border-radius: 3px;
+            padding: 1px 4px;
+            font-weight: 600;
+        }
+
+        .table-indicator {
+            background: #c53030;
+            color: white;
+            padding: 12px 20px;
+            margin: 20px 0;
+            text-align: center;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .indicator-close {
+            float: right;
+            cursor: pointer;
+            font-weight: bold;
+            margin-left: 15px;
+            opacity: 0.8;
+        }
+        .indicator-close:hover {
+            opacity: 1;
+        }
+
+        .table-indicator.warning {
+            background: #e53e3e;
+        }
+
+        footer, .footer, [class*="footer"], [id*="footer"] {
+            display: none !important;
+        }
+
+        .d-button {
+            background: #fff;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            color: #c53030;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 4px 12px;
+            margin: 4px 8px 4px 0;
+            display: inline-flex;
+            align-items: center;
+            transition: all 0.2s;
+        }
+
+        .d-button:hover {
+            background: #fff5f5;
+            border-color: #c53030;
+            color: #9b2c2c;
+        }
+
+        .d-panel {
+            background: #f8fafc;
+            border-left: 3px solid #c53030;
+            padding: 14px 18px;
+            margin: 10px 0 18px 0;
+            border-radius: 0 4px 4px 0;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        /* arXiv document styling */
+        .paper-content .ltx_document,
+        .paper-content .ltx_page_content,
+        .paper-content .ltx_page_main {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-sizing: border-box !important;
+        }
+
+        .paper-content .ltx_title_document {
+            font-size: 1.85rem;
+            font-weight: 700;
+            color: #1a202c;
+            margin: 15px 0 12px 0;
+            line-height: 1.35;
+        }
+
+        .paper-content .ltx_authors {
+            color: #718096;
+            font-style: italic;
+            margin-bottom: 25px;
+            font-size: 1.05rem;
+            line-height: 1.6;
+        }
+
+        .paper-content .ltx_abstract {
+            background: #f8fafc;
+            border-left: 4px solid #c53030;
+            padding: 18px 22px;
+            margin: 25px 0 30px 0;
+            border-radius: 0 6px 6px 0;
+        }
+
+        .paper-content .ltx_title_abstract {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #c53030;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        .paper-content .ltx_section {
+            margin-top: 30px;
+            margin-bottom: 20px;
+        }
+
+        .paper-content .ltx_title_section {
+            font-size: 1.35rem;
+            font-weight: 600;
+            color: #1a202c;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 6px;
+            margin-bottom: 14px;
+        }
+
+        .paper-content .ltx_title_subsection {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: #2d3748;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+
+        .paper-content .ltx_p,
+        .paper-content .ltx_para {
+            line-height: 1.8;
+            color: #2d3748;
+            margin-bottom: 12px;
+            font-size: 1.05rem;
+        }
+
+        .paper-content .ltx_table,
+        .paper-content .ltx_figure {
+            margin: 25px auto;
+            text-align: center;
+        }
+
+        .paper-content .ltx_caption {
+            font-size: 0.95rem;
+            color: #4a5568;
+            margin-top: 8px;
+            margin-bottom: 12px;
+            text-align: left;
+        }
+
+        .paper-content .ltx_ERROR {
+            display: none !important;
+        }
+
+        .paper-content dialog,
+        .paper-content .arxiv-html-header,
+        .paper-content .arxiv-html-footer,
+        .paper-content .ds-site-footer,
+        .paper-content .ds-announcement,
+        .paper-content .ltx_page_navbar,
+        .paper-content .fixed-buttons-container {
+            display: none !important;
+        }
+
+        /* References / Bibliography styling */
+        .paper-content .ltx_bibliography,
+        .paper-content section.references,
+        .paper-content .ref-list {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #e2e8f0;
+        }
+
+        .paper-content .ltx_biblist {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .paper-content .ltx_bibitem {
+            margin-bottom: 12px;
+            padding: 8px 12px;
+            border-radius: 4px;
+            line-height: 1.6;
+            font-size: 0.95rem;
+            color: #2d3748;
+        }
+
+        .paper-content .ltx_tag_bibitem {
+            font-weight: 700;
+            color: #c53030;
+            margin-right: 8px;
+        }
+
+        .paper-content .ltx_bibitem a {
+            word-break: break-all;
+        }
+    </style>
+</head>
+
+<body>
+<div class="container">
+    <div class="paper-container">
+
+        <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+            <a id="smart-back-btn" href="/" class="back-btn mb-0">← Back to search</a>
+            <div class="d-flex gap-2 align-items-center">
+                {% if 'arxiv' in (paper.html_url or '') or 'arxiv' in (paper.pdf_url or '') or (paper.paper_id and not paper.pmc_id) %}
+                    <span class="badge bg-secondary">arXiv: {{ paper.paper_id }}</span>
+                    <a href="https://arxiv.org/abs/{{ paper.paper_id }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-danger btn-sm">
+                        arXiv Abstract ↗
+                    </a>
+                    <a href="/pdf/{{ paper.paper_id }}" target="_blank" rel="noopener noreferrer" class="btn btn-danger btn-sm">
+                        PDF arXiv ↗
+                    </a>
+                {% elif paper.html_url %}
+                    {% if paper.pmc_id %}<span class="badge bg-secondary">{{ paper.pmc_id }}</span>{% endif %}
+                    <a href="{{ paper.html_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-danger btn-sm">
+                        PubMed ↗
+                    </a>
+                    {% if paper.doi %}
+                    <a href="https://doi.org/{{ paper.doi }}" target="_blank" rel="noopener noreferrer" class="btn btn-danger btn-sm">
+                        DOI ↗
+                    </a>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+
+        {% if not paper.html_content %}
+        <div id="fallback-header">
+            <h1 id="fallback-paper-title" class="h3 fw-bold text-dark mb-2">{{ paper.title }}</h1>
+
+            <p id="fallback-paper-authors" class="authors text-muted mb-2">
+                {% if paper.authors %}
+                    {% if paper.authors is string %}
+                        {{ paper.authors }}
+                    {% else %}
+                        {{ paper.authors | join(', ') }}
+                    {% endif %}
+                {% else %}
+                    No authors listed
+                {% endif %}
+            </p>
+
+            <div class="d-flex flex-wrap gap-2 align-items-center mb-3 text-secondary small">
+                {% if paper.published %}
+                    <span><strong>Pubblicato:</strong> {{ paper.published[:10] }}</span>
+                {% endif %}
+                {% if paper.paper_id %}
+                    <span>• <strong>ID:</strong> {{ paper.paper_id }}</span>
+                {% endif %}
+                {% if paper.doi %}
+                    <span>• <strong>DOI:</strong> <a href="https://doi.org/{{ paper.doi }}" target="_blank" rel="noopener noreferrer" class="text-decoration-none text-danger">{{ paper.doi }}</a></span>
+                {% endif %}
+                {% if paper.pmc_id %}
+                    <span>• <strong>PMC:</strong> {{ paper.pmc_id }}</span>
+                {% endif %}
+            </div>
+
+            <div class="p-3 mb-3 bg-light border rounded d-flex flex-wrap justify-content-between align-items-center gap-2">
+                {% if 'arxiv' in (paper.html_url or '') or 'arxiv' in (paper.pdf_url or '') or (paper.paper_id and not paper.pmc_id) %}
+                    <div>
+                        <span class="badge bg-secondary me-2">arXiv Document</span>
+                        <span class="small text-muted">Questo documento proviene dall'archivio arXiv. Puoi consultare l'abstract e il PDF originale online.</span>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <a href="https://arxiv.org/abs/{{ paper.paper_id }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-danger btn-sm">
+                            Apri su arXiv ↗
+                        </a>
+                        <a href="/pdf/{{ paper.paper_id }}" target="_blank" rel="noopener noreferrer" class="btn btn-danger btn-sm">
+                            PDF arXiv ↗
+                        </a>
+                    </div>
+                {% else %}
+                    <div>
+                        <span class="badge bg-secondary me-2">PubMed Abstract</span>
+                        <span class="small text-muted">Questo documento è una scheda citazionale PubMed con abstract. Il testo integrale è consultabile sulla rivista originale.</span>
+                    </div>
+                    <div class="d-flex gap-2">
+                        {% if paper.html_url %}
+                            <a href="{{ paper.html_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-danger btn-sm">
+                                Apri su PubMed ↗
+                            </a>
+                        {% elif paper.paper_id %}
+                            <a href="https://pubmed.ncbi.nlm.nih.gov/{{ paper.paper_id }}/" target="_blank" rel="noopener noreferrer" class="btn btn-outline-danger btn-sm">
+                                Apri su PubMed ↗
+                            </a>
+                        {% endif %}
+                        {% if paper.doi %}
+                            <a href="https://doi.org/{{ paper.doi }}" target="_blank" rel="noopener noreferrer" class="btn btn-danger btn-sm">
+                                Testo Completo Editore (DOI) ↗
+                            </a>
+                        {% endif %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <hr>
+        </div>
+        {% endif %}
+
+        {% if table_number %}
+            <div class="table-indicator" id="tableIndicator">
+                Navigating to Table {{ table_number }}{% if query %} <span style="opacity:0.9; font-size:0.9em; font-weight:normal;">— Filtro: {{ query }}</span>{% endif %}
+                <span class="indicator-close" onclick="this.parentElement.remove()">✕</span>
+            </div>
+        {% elif figure_id %}
+            <div class="table-indicator" id="figureIndicator">
+                Navigating to Figure {{ figure_id }}{% if query %} <span style="opacity:0.9; font-size:0.9em; font-weight:normal;">— Filtro: {{ query }}</span>{% endif %}
+                <span class="indicator-close" onclick="this.parentElement.remove()">✕</span>
+            </div>
+        {% elif query %}
+            <div class="table-indicator" id="queryIndicator">
+                <span id="indicator-text">Highlighting: "{{ query }}"</span>
+                <span class="indicator-close" onclick="this.parentElement.remove()">✕</span>
+            </div>
+        {% endif %}
+
+        <div class="paper-content" id="paperContent">
+            {% if paper.html_content %}
+                {{ paper.html_content | safe }}
+            {% else %}
+                {% if paper.abstract %}
+                    <section class="abstract mb-4 p-4 bg-white border rounded shadow-sm">
+                        <h2 class="h5 fw-bold text-dark border-bottom pb-2 mb-3">Abstract</h2>
+                        <div class="abstract-text" style="line-height: 1.8; color: #2d3748; font-size: 1.05rem;">
+                            {{ paper.abstract }}
+                        </div>
+                    </section>
+                {% endif %}
+                {% if paper.full_text and paper.full_text != paper.abstract %}
+                    <section class="full-text mt-4 p-4 bg-white border rounded shadow-sm">
+                        <h2 class="h5 fw-bold text-dark border-bottom pb-2 mb-3">Full Text</h2>
+                        <div class="full-text-content" style="line-height: 1.8; color: #2d3748; white-space: pre-line;">
+                            {{ paper.full_text }}
+                        </div>
+                    </section>
+                {% elif not paper.abstract %}
+                    <div class="alert alert-warning">Nessun testo completo o abstract disponibile per questo documento.</div>
+                {% endif %}
+            {% endif %}
+        </div>
+
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const params = new URLSearchParams(window.location.search);
+    const elementId = params.get('element_id');
+    const tableNumber = params.get('table');
+    const figureId = params.get('figure') || params.get('figure_id');
+    const category = params.get('category');
+    const query = params.get('query');
+    const content = document.getElementById('paperContent');
+
+        if (content) {
+        const innerH1 = content.querySelector('h1, .content-title, .article-title, .fm-title');
+        if (innerH1 && innerH1.textContent.trim().length > 5) {
+            document.getElementById('fallback-header')?.remove();
+        }
+
+                const pmcId = "{{ paper.pmc_id }}";
+        content.querySelectorAll('a[href]').forEach(a => {
+            let href = a.getAttribute('href');
+            if (!href || href.startsWith('#') || href.startsWith('http://') || href.startsWith('https://') || href.startsWith('mailto:') || href.startsWith('javascript:')) {
+                return;
+            }
+
+            if (href.startsWith('/pdf/') || href.startsWith('pdf/')) {
+                let clean = href.startsWith('/') ? href.slice(1) : href;
+                if (!clean.endsWith('.pdf')) clean += '.pdf';
+                a.href = `https://arxiv.org/${clean}`;
+                a.target = "_blank";
+                a.rel = "noopener noreferrer";
+            } else if (href.startsWith('/abs/') || href.startsWith('abs/')) {
+                let clean = href.startsWith('/') ? href.slice(1) : href;
+                a.href = `https://arxiv.org/${clean}`;
+                a.target = "_blank";
+                a.rel = "noopener noreferrer";
+            } else if (href.startsWith('/about/') || href.startsWith('about/')) {
+                let clean = href.startsWith('/') ? href.slice(1) : href;
+                a.href = `https://pmc.ncbi.nlm.nih.gov/${clean}`;
+                a.target = "_blank";
+                a.rel = "noopener noreferrer";
+            } else if (href.startsWith('/pmc/') || href.startsWith('pmc/')) {
+                let clean = href.startsWith('/') ? href.slice(1) : href;
+                a.href = `https://pmc.ncbi.nlm.nih.gov/${clean}`;
+                a.target = "_blank";
+                a.rel = "noopener noreferrer";
+            } else if (href.startsWith('/articles/') || href.startsWith('articles/')) {
+                let clean = href.startsWith('/') ? href.slice(1) : href;
+                a.href = `https://pmc.ncbi.nlm.nih.gov/${clean}`;
+                a.target = "_blank";
+                a.rel = "noopener noreferrer";
+            } else if (href.startsWith('table/') || href.startsWith('/table/') || href.startsWith('figure/') || href.startsWith('/figure/')) {
+                let clean = href.startsWith('/') ? href.slice(1) : href;
+                if (pmcId) {
+                    a.href = `https://pmc.ncbi.nlm.nih.gov/articles/${pmcId}/${clean}`;
+                } else {
+                    a.href = `https://pmc.ncbi.nlm.nih.gov/${clean}`;
+                }
+                a.target = "_blank";
+                a.rel = "noopener noreferrer";
+            } else if (href.startsWith('bin/') || href.startsWith('/bin/') || href.startsWith('instance/') || href.startsWith('/instance/')) {
+                let clean = href.startsWith('/') ? href.slice(1) : href;
+                if (pmcId) {
+                    a.href = `https://pmc.ncbi.nlm.nih.gov/articles/${pmcId}/${clean}`;
+                } else {
+                    a.href = `https://pmc.ncbi.nlm.nih.gov/articles/${clean}`;
+                }
+                a.target = "_blank";
+                a.rel = "noopener noreferrer";
+            }
+        });
+
+        const urlRegex = /(https?:\/\/[^\s<>"')]+)/g;
+        const arxivRegex = /\barXiv:\s*(\d{4}\.\d{4,5}(?:v\d+)?)\b/gi;
+
+        content.querySelectorAll('.ltx_bibliography, #bib, section.references, .ref-list').forEach(bib => {
+            bib.querySelectorAll('.ltx_url, .ltx_ref_self').forEach(el => {
+                const rawUrl = (el.textContent || '').trim();
+                const cleanUrl = rawUrl.replace(/[.,;:]+$/, '');
+                const trailing = rawUrl.slice(cleanUrl.length);
+                if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+                    const a = document.createElement('a');
+                    a.href = cleanUrl;
+                    a.target = '_blank';
+                    a.rel = 'noopener noreferrer';
+                    a.className = 'text-decoration-none text-danger fw-semibold';
+                    a.textContent = cleanUrl;
+                    if (trailing) {
+                        const span = document.createElement('span');
+                        span.appendChild(a);
+                        span.appendChild(document.createTextNode(trailing));
+                        el.replaceWith(span);
+                    } else {
+                        el.replaceWith(a);
+                    }
+                }
+            });
+
+            bib.querySelectorAll('.ltx_bibblock, .ltx_bibitem, li').forEach(item => {
+                Array.from(item.childNodes).forEach(node => {
+                    if (node.nodeType === Node.TEXT_NODE && node.textContent) {
+                        const text = node.textContent;
+                        if (text.includes('http://') || text.includes('https://')) {
+                            const replaced = text.replace(/(https?:\/\/[^\s<>"')]+)/g, (match) => {
+                                const clean = match.replace(/[.,;:]+$/, '');
+                                const punct = match.slice(clean.length);
+                                return `<a href="${clean}" target="_blank" rel="noopener noreferrer" class="text-decoration-none text-danger fw-semibold">${clean}</a>${punct}`;
+                            });
+                            const span = document.createElement('span');
+                            span.innerHTML = replaced;
+                            node.replaceWith(span);
+                        }
+                    }
+                });
+            });
+        });
+
+        content.querySelectorAll('a.ltx_ref[href^="#bib."]').forEach(citeLink => {
+            citeLink.addEventListener('click', function(e) {
+                const targetId = this.getAttribute('href').substring(1);
+                const targetEl = document.getElementById(targetId);
+                if (targetEl) {
+                    e.preventDefault();
+                    scrollToTarget(targetEl);
+                    targetEl.style.transition = 'background-color 0.5s ease';
+                    targetEl.style.backgroundColor = '#fff5f5';
+                    setTimeout(() => {
+                        targetEl.style.backgroundColor = '';
+                    }, 2000);
+                }
+            });
+        });
+
+        content.querySelectorAll('button[aria-controls]').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('aria-controls');
+                if (!targetId) return;
+                const panel = document.getElementById(targetId);
+                if (panel) {
+                    const isHidden = panel.style.display === 'none' || panel.hasAttribute('hidden') || getComputedStyle(panel).display === 'none';
+                    if (isHidden) {
+                        panel.style.display = 'block';
+                        panel.removeAttribute('hidden');
+                        this.setAttribute('aria-expanded', 'true');
+                    } else {
+                        panel.style.display = 'none';
+                        this.setAttribute('aria-expanded', 'false');
+                    }
+                }
+            });
+        });
+    }
+
+    const backBtn = document.getElementById('smart-back-btn');
+    if (backBtn && query) {
+        backBtn.onclick = e => {
+            e.preventDefault();
+            history.back();
+        };
+    }
+
+    function scrollToTarget(target) {
+        if (!target) return;
+        const rect = target.getBoundingClientRect();
+        const top = rect.top + window.pageYOffset - 120;
+        window.scrollTo({
+            top: Math.max(top, 0),
+            behavior: 'smooth'
+        });
+    }
+
+    function highlightAndScroll(target, type) {
+        if (!target) return false;
+        const highlightClass = type === 'table' ? 'table-highlight' : 'figure-highlight';
+        target.classList.add(highlightClass);
+        scrollToTarget(target);
+
+        return true;
+    }
+
+    function locateTable(targetNumber, explicitElementId) {
+        if (!content) return null;
+
+                if (explicitElementId) {
+            let el = document.getElementById(explicitElementId);
+            if (!el) {
+                try { el = content.querySelector(`[id="${explicitElementId}"]`); } catch(e) {}
+            }
+            if (el) {
+                const container = el.closest('.ltx_table, .tw, .xbox, .tbl-box, .table-box, figure, table') || el;
+                highlightAndScroll(container, 'table');
+                return container;
+            }
+        }
+
+                if (targetNumber) {
+            const possibleIds = [
+                `T${targetNumber}`, `t${targetNumber}`,
+                `tab${targetNumber}`, `Tab${targetNumber}`,
+                `tbl${targetNumber}`, `Tbl${targetNumber}`,
+                `table_${targetNumber}`, `table-${targetNumber}`,
+                `table${targetNumber}`
+            ];
+            for (const pid of possibleIds) {
+                let el = document.getElementById(pid);
+                if (el) {
+                    const container = el.closest('.ltx_table, .tw, .xbox, .tbl-box, .table-box, figure, table') || el;
+                    highlightAndScroll(container, 'table');
+                    return container;
+                }
+            }
+
+                        const headings = content.querySelectorAll('h1, h2, h3, h4, h5, h6, caption, figcaption, .obj_head, [class*="caption"]');
+            const pattern = new RegExp(`\\b(Table|Tabella|Tbl)\\s*0*${targetNumber}\\b`, 'i');
+            for (const h of headings) {
+                if (pattern.test(h.textContent || '')) {
+                    const container = h.closest('.ltx_table, figure, div.tbl-box, div.tw, table') || h;
+                    highlightAndScroll(container, 'table');
+                    return container;
+                }
+            }
+
+                        const tables = content.querySelectorAll('table');
+            const idx = parseInt(targetNumber) - 1;
+            if (idx >= 0 && idx < tables.length) {
+                const container = tables[idx].closest('.ltx_table, .tw, .xbox, .tbl-box, .table-box, figure') || tables[idx];
+                highlightAndScroll(container, 'table');
+                return container;
+            }
+        }
+
+        const ind = document.getElementById('tableIndicator');
+        if (ind) {
+            ind.textContent = `Table ${targetNumber || ''} not found`;
+            ind.classList.add('warning');
+        }
+        return null;
+    }
+
+    function locateFigure(figId, explicitElementId) {
+        if (!content) return null;
+
+                if (explicitElementId) {
+            let el = document.getElementById(explicitElementId);
+            if (!el) {
+                try { el = content.querySelector(`[id="${explicitElementId}"]`); } catch(e) {}
+            }
+            if (el) {
+                const container = el.closest('.ltx_figure, figure, div.fig, div.image, div.figure-box, [class*="fig-box" i]') || el;
+                highlightAndScroll(container, 'figure');
+                return container;
+            }
+        }
+
+        let figNum = null;
+        if (figId) {
+            const numMatch = String(figId).match(/\d+/);
+            if (numMatch) {
+                const parsed = parseInt(numMatch[0]);
+                if (String(figId).startsWith('fig_')) {
+                    figNum = parsed + 1;
+                } else {
+                    figNum = parsed;
+                }
+            }
+        }
+
+                if (figNum !== null) {
+            const possibleIds = [
+                `F${figNum}`, `f${figNum}`,
+                `fig${figNum}`, `Fig${figNum}`,
+                `figure${figNum}`, `Figure${figNum}`,
+                `fig_${figNum}`, `fig-${figNum}`
+            ];
+            for (const pid of possibleIds) {
+                let el = document.getElementById(pid);
+                if (el) {
+                    const container = el.closest('.ltx_figure, figure, div.fig, div.image, div.figure-box, [class*="fig-box" i]') || el;
+                    highlightAndScroll(container, 'figure');
+                    return container;
+                }
+            }
+
+                        const headings = content.querySelectorAll('h1, h2, h3, h4, h5, h6, figcaption, caption, .obj_head, [class*="caption"]');
+            const pattern = new RegExp(`\\b(Figure|Fig)\\s*0*${figNum}\\b`, 'i');
+            for (const h of headings) {
+                if (pattern.test(h.textContent || '')) {
+                    const container = h.closest('.ltx_figure, figure, div.fig, div.image') || h;
+                    highlightAndScroll(container, 'figure');
+                    return container;
+                }
+            }
+
+                        const figures = content.querySelectorAll('figure:not(.ltx_table), .fig');
+            if (figNum > 0 && figNum <= figures.length) {
+                const container = figures[figNum - 1];
+                highlightAndScroll(container, 'figure');
+                return container;
+            }
+        }
+
+        const ind = document.getElementById('figureIndicator');
+        if (ind) {
+            ind.textContent = `Figure ${figId || ''} not found`;
+            ind.classList.add('warning');
+        }
+        return null;
+    }
+
+    function parseQueryInfo(rawText) {
+        if (!rawText) return { clauses: [], generalTerms: [] };
+
+        const clauseRegex = /\b(WHERE|AND|OR|NOT)\s+([^()]+?)\s*\((match|phrase|term)\)\s*'([^']*)'/gi;
+        const clauses = [];
+        let match;
+        while ((match = clauseRegex.exec(rawText)) !== null) {
+            const logic = match[1].toUpperCase();
+            const fieldRaw = match[2].trim().toLowerCase();
+            let field = 'all';
+            if (fieldRaw.includes('abstract')) field = 'abstract';
+            else if (fieldRaw === 'paper_title' || fieldRaw.includes('paper_title')) field = 'paper_title';
+            else if (fieldRaw.includes('title')) field = 'title';
+            else if (fieldRaw.includes('author')) field = 'authors';
+            else if (fieldRaw.includes('caption')) field = 'caption';
+            else if (fieldRaw.includes('body')) field = 'body';
+            else if (fieldRaw.includes('mention')) field = 'mentions';
+            else if (fieldRaw.includes('context')) field = 'context_paragraphs';
+            else if (fieldRaw.includes('text')) field = 'full_text';
+            else if (fieldRaw.includes('table_number') || fieldRaw.includes('figure_number') || fieldRaw.includes('element_id') || fieldRaw.includes('paper_id') || fieldRaw.includes('pmc_id') || fieldRaw.includes('url')) field = 'meta_field';
+
+            const op = match[3].toLowerCase();
+            const val = match[4].trim();
+
+            let terms = [];
+            if (val.length > 0) {
+                terms.push(val);
+                if (op === 'match') {
+                    const words = val.split(/\s+/).filter(w => w.length > 0);
+                    words.forEach(w => {
+                        if (!terms.includes(w)) terms.push(w);
+                    });
+                }
+            }
+
+            clauses.push({ logic, field, op, value: val, terms });
+        }
+
+        let generalTerms = [];
+        if (clauses.length === 0) {
+            const quoted = rawText.match(/'([^']+)'/g);
+            if (quoted && quoted.length > 0) {
+                generalTerms = quoted.map(q => q.replace(/^'|'$/g, '').trim()).filter(t => t.length > 0);
+            } else {
+                const cleaned = rawText.replace(/\b(AND|OR|NOT|WHERE)\b/gi, ' ')
+                                       .replace(/[()]/g, ' ')
+                                       .trim();
+                generalTerms = cleaned.split(/\s+/).filter(t => t.length > 0);
+            }
+        }
+
+        return { clauses, generalTerms };
+    }
+
+    function getAbstractElement(root) {
+        if (!root) return null;
+        let el = root.querySelector('section.abstract, [class*="abstract" i], [id*="abstract" i], [id*="Abs" i]');
+        if (!el) {
+            const headings = root.querySelectorAll('h1, h2, h3, h4, h5, h6, .obj_head');
+            for (const h of headings) {
+                if (/^\s*abstract\s*$/i.test((h.textContent || '').trim())) {
+                    el = h.closest('section, div') || h.parentElement;
+                    break;
+                }
+            }
+        }
+        return el;
+    }
+
+    function getAuthorContainers(root) {
+        if (!root) return [];
+        const targets = [];
+        const fallback = document.getElementById('fallback-paper-authors');
+        if (fallback) targets.push(fallback);
+
+        const selectors = [
+            'section.front-matter .cg',
+            '.cg',
+            '.contrib-group',
+            '.fm-author',
+            '.authors',
+            '.ltx_authors',
+            '.ltx_creator',
+            '.ltx_personname',
+            '[class*="contrib"]',
+            'section.front-matter'
+        ];
+        for (const sel of selectors) {
+            const list = root.querySelectorAll(sel);
+            list.forEach(el => {
+                if (!el.classList.contains('author-notes') && !targets.includes(el)) {
+                    targets.push(el);
+                }
+            });
+        }
+        return targets;
+    }
+
+    function highlightTerms(terms, rootElement) {
+        if (!rootElement || !terms || terms.length === 0) return null;
+
+        const cleanTerms = terms.map(t => t.trim()).filter(t => t.length > 0);
+        if (cleanTerms.length === 0) return null;
+
+        cleanTerms.sort((a, b) => b.length - a.length);
+
+        const patterns = cleanTerms.map(t => {
+            const escaped = t.split(/\s+/).map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+');
+            const prefix = /^\w/.test(t) ? '\\b' : '';
+            const suffix = /\w$/.test(t) ? '\\b' : '';
+            return `${prefix}${escaped}${suffix}`;
+        });
+
+        const patternStr = patterns.join('|');
+        const matchRegex = new RegExp(`(${patternStr})`, 'gi');
+        const testRegex = new RegExp(`^(${patternStr})$`, 'i');
+
+        const walker = document.createTreeWalker(rootElement, NodeFilter.SHOW_TEXT);
+        let node;
+        let firstMatch = null;
+        const nodesToReplace = [];
+
+        while (node = walker.nextNode()) {
+            if (!node.parentElement || node.parentElement.classList.contains('query-highlight')) continue;
+            if (['SCRIPT', 'STYLE', 'BUTTON', 'INPUT', 'TEXTAREA'].includes(node.parentElement.tagName)) continue;
+            if (new RegExp(patternStr, 'i').test(node.textContent)) {
+                nodesToReplace.push(node);
+            }
+        }
+
+        nodesToReplace.forEach(n => {
+            const span = document.createElement('span');
+            const parts = n.textContent.split(matchRegex);
+            parts.forEach(part => {
+                if (!part) return;
+                if (testRegex.test(part)) {
+                    const mark = document.createElement('span');
+                    mark.className = 'query-highlight';
+                    mark.textContent = part;
+                    span.appendChild(mark);
+                    if (!firstMatch) {
+                        firstMatch = mark;
+                    }
+                } else {
+                    span.appendChild(document.createTextNode(part));
+                }
+            });
+            if (n.parentNode) {
+                n.parentNode.replaceChild(span, n);
+            }
+        });
+
+        return firstMatch;
+    }
+
+    const queryData = parseQueryInfo(query);
+    const positiveClauses = queryData.clauses.filter(c => c.logic !== 'NOT');
+    let primaryScrollTarget = null;
+
+    if (tableNumber || category === 'tables' || (elementId && (elementId.startsWith('T') || elementId.startsWith('t') || elementId.includes('.T')))) {
+        const tableTarget = locateTable(tableNumber, elementId);
+        if (tableTarget) {
+            if (positiveClauses.length > 0) {
+                positiveClauses.forEach(clause => {
+                    if (clause.field === 'caption') {
+                        const capEls = tableTarget.querySelectorAll('caption, figcaption, [class*="caption" i], .obj_head');
+                        if (capEls.length > 0) {
+                            capEls.forEach(el => highlightTerms(clause.terms, el));
+                        } else {
+                            highlightTerms(clause.terms, tableTarget);
+                        }
+                    } else if (clause.field === 'body') {
+                        const bodyEl = tableTarget.querySelector('table, tbody, thead, tfoot') || tableTarget;
+                        highlightTerms(clause.terms, bodyEl);
+                    } else if (clause.field === 'paper_title' || clause.field === 'title') {
+                        const titleEl = content.querySelector('h1, .content-title, .article-title, .fm-title, .title, .ltx_title_document, .ltx_title') || document.getElementById('fallback-paper-title');
+                        if (titleEl) highlightTerms(clause.terms, titleEl);
+                    } else if (clause.field === 'authors') {
+                        const authorEls = getAuthorContainers(content);
+                        authorEls.forEach(el => highlightTerms(clause.terms, el));
+                    } else if (clause.field === 'mentions' || clause.field === 'context_paragraphs') {
+                        highlightTerms(clause.terms, content);
+                    } else if (clause.field === 'meta_field') {
+                    } else {
+                        highlightTerms(clause.terms, tableTarget);
+                    }
+                });
+            } else if (queryData.generalTerms.length > 0) {
+                highlightTerms(queryData.generalTerms, tableTarget);
+            }
+        }
+    } else if (figureId || category === 'figures' || category === 'images' || (elementId && (elementId.startsWith('F') || elementId.startsWith('f') || elementId.includes('.F')))) {
+        const figureTarget = locateFigure(figureId, elementId);
+        if (figureTarget) {
+            if (positiveClauses.length > 0) {
+                positiveClauses.forEach(clause => {
+                    if (clause.field === 'caption') {
+                        const capEls = figureTarget.querySelectorAll('figcaption, caption, [class*="caption" i], .obj_head');
+                        if (capEls.length > 0) {
+                            capEls.forEach(el => highlightTerms(clause.terms, el));
+                        } else {
+                            highlightTerms(clause.terms, figureTarget);
+                        }
+                    } else if (clause.field === 'paper_title' || clause.field === 'title') {
+                        const titleEl = content.querySelector('h1, .content-title, .article-title, .fm-title, .title, .ltx_title_document, .ltx_title') || document.getElementById('fallback-paper-title');
+                        if (titleEl) highlightTerms(clause.terms, titleEl);
+                    } else if (clause.field === 'authors') {
+                        const authorEls = getAuthorContainers(content);
+                        authorEls.forEach(el => highlightTerms(clause.terms, el));
+                    } else if (clause.field === 'mentions' || clause.field === 'context_paragraphs') {
+                        highlightTerms(clause.terms, content);
+                    } else if (clause.field === 'meta_field') {
+                    } else {
+                        highlightTerms(clause.terms, figureTarget);
+                    }
+                });
+            } else if (queryData.generalTerms.length > 0) {
+                highlightTerms(queryData.generalTerms, figureTarget);
+            }
+        }
+    } else if (content) {
+        if (positiveClauses.length > 0) {
+            const hasAbstractOnly = positiveClauses.length === 1 && positiveClauses[0].field === 'abstract';
+            const hasTitleOnly = positiveClauses.length === 1 && (positiveClauses[0].field === 'title' || positiveClauses[0].field === 'paper_title');
+
+            if (hasAbstractOnly) {
+                const abstractEl = getAbstractElement(content);
+                if (abstractEl) {
+                    const match = highlightTerms(positiveClauses[0].terms, abstractEl);
+                    primaryScrollTarget = match || abstractEl;
+                    const indText = document.getElementById('indicator-text');
+                    if (indText) indText.textContent = `Highlighting in Abstract: "${positiveClauses[0].terms.join(', ')}"`;
+                } else {
+                    primaryScrollTarget = highlightTerms(positiveClauses[0].terms, content);
+                }
+            } else if (hasTitleOnly) {
+                const titleEl = content.querySelector('h1, .content-title, .article-title, .fm-title, .title, .ltx_title_document, .ltx_title') || document.getElementById('fallback-paper-title');
+                if (titleEl) {
+                    const match = highlightTerms(positiveClauses[0].terms, titleEl);
+                    primaryScrollTarget = match || titleEl;
+                    const indText = document.getElementById('indicator-text');
+                    if (indText) indText.textContent = `Highlighting in Title: "${positiveClauses[0].terms.join(', ')}"`;
+                } else {
+                    primaryScrollTarget = highlightTerms(positiveClauses[0].terms, content);
+                }
+            } else {
+                positiveClauses.forEach(clause => {
+                    if (clause.field === 'abstract') {
+                        const abEl = getAbstractElement(content);
+                        if (abEl) {
+                            const m = highlightTerms(clause.terms, abEl);
+                            if (!primaryScrollTarget && m) primaryScrollTarget = m;
+                        } else {
+                            const m = highlightTerms(clause.terms, content);
+                            if (!primaryScrollTarget && m) primaryScrollTarget = m;
+                        }
+                    } else if (clause.field === 'authors') {
+                        const authorEls = getAuthorContainers(content);
+                        let matched = false;
+                        authorEls.forEach(el => {
+                            const m = highlightTerms(clause.terms, el);
+                            if (m) {
+                                matched = true;
+                                if (!primaryScrollTarget) primaryScrollTarget = m;
+                            }
+                        });
+                        if (!matched) {
+                            const fallbackTitle = document.getElementById('fallback-paper-authors');
+                            if (fallbackTitle) {
+                                const m = highlightTerms(clause.terms, fallbackTitle);
+                                if (!primaryScrollTarget && m) primaryScrollTarget = m;
+                            }
+                        }
+                    } else if (clause.field === 'title' || clause.field === 'paper_title') {
+                        const tEl = content.querySelector('h1, .content-title, .article-title, .fm-title, .title, .ltx_title_document, .ltx_title') || document.getElementById('fallback-paper-title');
+                        if (tEl) {
+                            const m = highlightTerms(clause.terms, tEl);
+                            if (!primaryScrollTarget && m) primaryScrollTarget = m;
+                        }
+                    } else if (clause.field === 'meta_field') {
+                    } else {
+                        const m = highlightTerms(clause.terms, content);
+                        if (!primaryScrollTarget && m) primaryScrollTarget = m;
+                    }
+                });
+            }
+        } else if (queryData.generalTerms.length > 0) {
+            primaryScrollTarget = highlightTerms(queryData.generalTerms, content);
+        }
+
+        if (primaryScrollTarget) {
+            scrollToTarget(primaryScrollTarget);
+        }
+    }
+
+    window.addEventListener('load', function() {
+        const target = document.querySelector('.table-highlight') ||
+                       document.querySelector('.figure-highlight') ||
+                       document.querySelector('.query-highlight');
+        if (target) {
+            scrollToTarget(target);
+        }
+    });
+});
+</script>
+
+</body>
+</html>

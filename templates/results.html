@@ -1,39 +1,288 @@
 <!DOCTYPE html>
-<html>
+<html lang="it">
 <head>
-    <title>Risultati per {{ query }}</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search Results: {{ query }}</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        body {
+            background: #f5f5f5;
+            font-family: 'Georgia', 'Times New Roman', serif;
+            padding: 30px 0;
+        }
+        .results-container {
+            background: white;
+            border-radius: 8px;
+            padding: 40px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            max-width: 1100px;
+            margin: 0 auto;
+            border-top: 4px solid #c53030;
+        }
+        .back-btn {
+            color: #c53030;
+            text-decoration: none;
+            font-weight: 600;
+            display: inline-block;
+            margin-bottom: 20px;
+            transition: color 0.2s;
+        }
+        .back-btn:hover {
+            color: #9b2c2c;
+            text-decoration: underline;
+        }
+        h2 {
+            color: #1a202c;
+            font-weight: 600;
+            margin-bottom: 25px;
+        }
+        .badge-category {
+            background: #c53030;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 3px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .result-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-left: 3px solid #c53030;
+            border-radius: 4px;
+            padding: 25px;
+            margin-bottom: 20px;
+            transition: box-shadow 0.2s;
+            overflow: hidden;
+        }
+        .result-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        .paper-title-section {
+            margin-bottom: 15px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .paper-title-section strong {
+            color: #c53030;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: block;
+            margin-bottom: 5px;
+        }
+        .paper-title-section .title-text {
+            color: #1a202c;
+            font-weight: 600;
+            font-size: 1rem;
+            line-height: 1.4;
+            display: block;
+        }
+        .caption-section {
+            margin: 15px 0;
+            padding: 15px;
+            background: #f7fafc;
+            border-radius: 4px;
+            border-left: 3px solid #c53030;
+        }
+        .caption-section strong {
+            color: #2d3748;
+            font-size: 0.9rem;
+            display: block;
+            margin-bottom: 8px;
+        }
+        .caption-text {
+            color: #4a5568;
+            line-height: 1.6;
+            display: block;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        .card-actions {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .btn-action {
+            display: inline-block;
+            background: #c53030;
+            color: white;
+            text-decoration: none;
+            padding: 10px 24px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: background 0.2s;
+        }
+        .btn-action:hover {
+            background: #9b2c2c;
+            color: white;
+        }
+        .figure-image {
+            max-width: 100%;
+            height: auto;
+            max-height: 350px;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            margin: 15px 0;
+            display: block;
+        }
+        .relevance-score {
+            font-size: 0.8rem;
+            color: #a0aec0;
+            font-weight: 500;
+        }
+        .no-results {
+            text-align: center;
+            padding: 60px 40px;
+            color: #718096;
+        }
+        .no-results h5 {
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+        }
+        hr {
+            border-color: #e2e8f0;
+            margin: 25px 0;
+        }
+        .paper-card h4 {
+            color: #1a202c;
+            font-weight: 600;
+            margin-bottom: 15px;
+            font-size: 1.25rem;
+        }
+        .paper-card p {
+            color: #4a5568;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+        .paper-card strong {
+            color: #2d3748;
+        }
+    </style>
 </head>
-<body class="container mt-4">
-    <a href="/" class="btn btn-outline-secondary mb-3">Torna alla Home</a>
-    <h2>Risultati per: "{{ query }}" in {{ category }}</h2>
-    <hr>
 
-    <div class="list-group">
-        {% for hit in hits %}
-            <div class="list-group-item mb-3 shadow-sm p-4">
-                {% if category == 'papers' %}
-                    <h4>{{ hit._source.title }}</h4>
-                    <p><strong>Autori:</strong> {{ hit._source.authors }}</p>
-                    <p class="text-muted">{{ hit._source.abstract[:300] }}...</p>
-                {% elif category == 'tables' %}
-                    <h5>Tabella da Paper ID: {{ hit._source.paper_id }}</h5>
-                    <p class="badge bg-info text-dark">Caption: {{ hit._source.caption }}</p>
-                    <pre class="bg-light p-2" style="font-size: 0.8rem;">{{ hit._source.body[:500] }}...</pre>
-                {% elif category == 'figures' %}
-                    <h5>Figura da Paper ID: {{ hit._source.paper_id }}</h5>
-                    <p><strong>Didascalia:</strong> {{ hit._source.caption }}</p>
-                    <img src="{{ hit._source.url }}" class="img-fluid rounded border" style="max-height: 300px;" alt="Figura">
-                {% endif %}
-                <div class="mt-2">
-                    <small class="text-secondary">Punteggio rilevanza: {{ hit._score }}</small>
+<body>
+<div class="container">
+    <div class="results-container">
+
+        <a href="/" class="back-btn" onclick="if (window.history.length > 1) { event.preventDefault(); window.history.back(); }">← Back to search</a>
+
+        <h2>
+            Search Results for: "{{ query }}"
+            <span class="badge-category">{{ category }}</span>
+        </h2>
+
+        <hr>
+
+        {% if hits %}
+            {% for hit in hits %}
+                <div class="result-card">
+
+                    {% if category == 'papers' %}
+                        <div class="paper-card">
+                            <h4>{{ hit._source.title }}</h4>
+                            <p><strong>Authors:</strong> 
+                                {% if hit._source.authors is string %}
+                                    {{ hit._source.authors }}
+                                {% elif hit._source.authors %}
+                                    {{ hit._source.authors | join(', ') }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </p>
+                            {% if hit._source.abstract %}
+                            <p>{{ hit._source.abstract[:450] }}...</p>
+                            {% endif %}
+
+                            <div class="card-actions">
+                                <a href="/paper/{{ hit._source.pmc_id or hit._source.paper_id or hit._id }}?query={{ query | urlencode }}&category={{ category }}"
+                                   class="btn-action">
+                                    View in document →
+                                </a>
+                                <span class="relevance-score">Score: {{ "%.2f"|format(hit._score) if hit._score else "N/A" }}</span>
+                            </div>
+                        </div>
+
+                    {% elif category == 'tables' %}
+                        <div class="paper-title-section">
+                            <strong style="color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 3px;">Paper di provenienza</strong>
+                            <span class="title-text" style="color: #1a202c; font-weight: 600; font-size: 1rem;">{{ hit._source.paper_title }}</span>
+                        </div>
+
+                        {% if 'body' in query|lower and 'caption' not in query|lower %}
+                            <div class="caption-section" style="background: #fffaf0; border-left: 3px solid #dd6b20;">
+                                <strong style="color: #7c2d12; font-size: 0.85rem; display: block; margin-bottom: 6px;">Corpo Tabella {{ hit._source.table_number or '' }}</strong>
+                                <div class="caption-text" style="color: #4a5568; line-height: 1.5; max-height: 90px; overflow: hidden;">
+                                    {{ hit._source.body[:300] }}...
+                                </div>
+                            </div>
+                        {% elif 'caption' in query|lower and 'body' not in query|lower %}
+                            <div class="caption-section">
+                                <strong class="caption-text">{{ hit._source.caption or ('Table ' ~ hit._source.table_number) }}</strong>
+                            </div>
+                        {% else %}
+                            <div class="caption-section">
+                                <strong class="caption-text">{{ hit._source.caption or ('Table ' ~ hit._source.table_number) }}</strong>
+                            </div>
+                            {% if hit._source.body %}
+                            <details class="mb-3">
+                                <summary class="text-muted small" style="cursor: pointer; user-select: none;">Mostra anteprima dati tabella</summary>
+                                <div class="p-2 mt-1 bg-light border rounded small text-muted" style="max-height: 80px; overflow: hidden; line-height: 1.4;">
+                                    {{ hit._source.body[:280] }}...
+                                </div>
+                            </details>
+                            {% endif %}
+                        {% endif %}
+
+                        <div class="card-actions">
+                            <a href="/paper/{{ hit._source.pmc_id or hit._source.paper_id or hit._id }}?table={{ hit._source.table_number }}&element_id={{ hit._source.element_id or '' }}&query={{ query | urlencode }}&category={{ category }}"
+                               class="btn-action">
+                                View in document →
+                            </a>
+                            <span class="relevance-score">Score: {{ "%.2f"|format(hit._score) if hit._score else "N/A" }}</span>
+                        </div>
+
+                    {% elif category == 'figures' or category == 'images' %}
+                        <div class="paper-title-section">
+                            <strong>Paper</strong>
+                            <span class="title-text">{{ hit._source.paper_title }}</span>
+                        </div>
+
+                        <div class="caption-section">
+                            <strong class="caption-text">{{ hit._source.caption or ('Figure ' ~ hit._source.figure_number) }}</strong>
+                        </div>
+
+                        <img src="{{ hit._source.url }}"
+                             class="figure-image"
+                             alt="Figure">
+
+                        <div class="card-actions">
+                            <a href="/paper/{{ hit._source.pmc_id or hit._source.paper_id or hit._id }}?figure={{ hit._source.figure_number or hit._source.figure_id }}&element_id={{ hit._source.element_id or '' }}&query={{ query | urlencode }}&category={{ category }}"
+                               class="btn-action">
+                                View in document →
+                            </a>
+                            <span class="relevance-score">Score: {{ "%.2f"|format(hit._score) if hit._score else "N/A" }}</span>
+                        </div>
+                    {% endif %}
+
                 </div>
+            {% endfor %}
+        {% else %}
+            <div class="no-results">
+                <h5>No results found</h5>
+                <p>Try different keywords</p>
             </div>
-        {% endfor %}
-    </div>
+        {% endif %}
 
-    {% if not hits %}
-        <div class="alert alert-warning">Nessun risultato trovato. Prova con altre parole chiave.</div>
-    {% endif %}
+    </div>
+</div>
 </body>
 </html>

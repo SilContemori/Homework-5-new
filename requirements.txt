@@ -1,0 +1,12 @@
+beautifulsoup4
+elasticsearch
+fastapi
+feedparser
+jinja2
+loguru
+lxml
+pydantic-settings
+requests
+tqdm
+urllib3
+uvicorn[standard]
