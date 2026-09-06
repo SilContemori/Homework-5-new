@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request, Query, BackgroundTasks
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.templating import Jinja2Templates
 from elasticsearch import Elasticsearch
 import urllib3
@@ -37,6 +38,14 @@ app = FastAPI(
     description="API per la ricerca e gestione di articoli scientifici, tabelle e figure (arXiv e PubMed Central).",
     version="1.0.0",
     openapi_tags=tags_metadata,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import warnings
