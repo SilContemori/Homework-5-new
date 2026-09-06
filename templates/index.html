@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -20,7 +20,7 @@
             border-radius: 8px;
             padding: 40px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            max-width: 800px;
+            max-width: 860px;
             width: 100%;
             border-top: 4px solid #c53030;
         }
@@ -89,27 +89,36 @@
     <div class="search-container">
         <div class="institution">Information Retrieval Project</div>
         <h1 class="text-center">Academic Search Engine</h1>
-        <p class="subtitle text-center">Entity Resolution & Entity Matching Literature</p>
+        <p class="subtitle text-center">Scientific Literature Search Engine — arXiv & PubMed/PMC</p>
 
         {% if error %}
         <div class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
-            <strong>Errore:</strong> {{ error | safe }}
+            <strong>Error:</strong> {{ error | safe }}
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
         {% endif %}
 
         <form action="/search" method="get" id="search-form">
             <div class="row g-3 mb-3">
-                <div class="col-md-8">
+                <div class="col-md-5">
+                    <label class="form-label small text-muted mb-1 fw-bold">Search Entity</label>
                     <select name="category" id="category-select" class="form-select">
                         <option value="papers" selected>Papers (Documents)</option>
-                        <option value="tables">Tables</option>
-                        <option value="figures">Images</option>
+                        <option value="tables">Tables (Tables & Context)</option>
+                        <option value="figures">Figures (Figures & Context)</option>
                     </select>
                 </div>
                 <div class="col-md-4">
+                    <label class="form-label small text-muted mb-1 fw-bold">Source Corpus</label>
+                    <select name="source" id="source-select" class="form-select">
+                        <option value="all" selected>All Corpora (arXiv + PubMed)</option>
+                        <option value="arxiv">arXiv only</option>
+                        <option value="pubmed">PubMed / PMC only</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small text-muted mb-1 fw-bold">Max Results</label>
                     <div class="input-group">
-                        <span class="input-group-text bg-light text-muted small">Risultati</span>
                         <input type="number" name="size" class="form-control" value="10" min="1" max="100">
                     </div>
                 </div>
@@ -117,8 +126,8 @@
 
             <div class="query-builder-card">
                 <div class="d-flex align-items-center mb-3">
-                    <span class="badge bg-dark me-2">FILTRI</span>
-                    <span class="text-muted small fw-bold">Costruttore di query booleane (WHERE + AND / OR / NOT)</span>
+                    <span class="badge bg-dark me-2">FILTERS</span>
+                    <span class="text-muted small fw-bold">Boolean Query Builder (WHERE + AND / OR / NOT)</span>
                 </div>
 
                 <div id="conditions-container">
@@ -127,19 +136,19 @@
                             <div class="badge bg-secondary py-2 w-100 text-center fw-bold" style="font-size: 0.85rem; letter-spacing: 1px;">WHERE</div>
                             <input type="hidden" name="logic[]" value="WHERE">
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <select name="field[]" class="form-select form-select-sm field-select">
-                                <option value="" selected>Campo...</option>
-                                <option value="title">title</option>
-                                <option value="abstract">abstract</option>
-                                <option value="authors">authors</option>
-                                <option value="full_text">full_text</option>
-                                <option value="paper_id">paper_id</option>
-                                <option value="pmc_id">pmc_id</option>
-                                <option value="published">published</option>
+                                <option value="" selected>Select field...</option>
+                                <option value="title">Title (title)</option>
+                                <option value="abstract">Abstract</option>
+                                <option value="authors">Authors (authors)</option>
+                                <option value="full_text">Full Text (full_text)</option>
+                                <option value="paper_id">Paper ID (arXiv / ID)</option>
+                                <option value="pmc_id">PMC ID (PubMed Central)</option>
+                                <option value="published">Publication Date</option>
                             </select>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <select name="operator[]" class="form-select form-select-sm">
                                 <option value="match" selected>match</option>
                                 <option value="phrase">phrase</option>
@@ -147,24 +156,24 @@
                             </select>
                         </div>
                         <div class="col-md-4">
-                            <input type="text" name="value[]" class="form-control form-control-sm" placeholder="Valore...">
+                            <input type="text" name="value[]" class="form-control form-control-sm" placeholder="Value...">
                         </div>
                     </div>
                 </div>
 
                 <div class="d-flex gap-2 justify-content-center mt-3">
                     <button type="button" id="add-condition-btn" class="btn btn-outline-secondary btn-sm">
-                        + Aggiungi Condizione
+                        + Add Condition
                     </button>
-                    <button type="button" id="clear-filters-btn" class="btn btn-outline-danger btn-sm" title="Reimposta tutti i filtri">
-                        Pulisci filtri
+                    <button type="button" id="clear-filters-btn" class="btn btn-outline-danger btn-sm" title="Reset all filters">
+                        Clear Filters
                     </button>
                 </div>
             </div>
 
             <div class="d-grid">
                 <button type="submit" class="btn btn-search">
-                    Cerca
+                    Search
                 </button>
             </div>
         </form>
@@ -178,49 +187,49 @@
     <script>
         const FIELDS_BY_CATEGORY = {
             papers: [
-                { value: "title", label: "title" },
-                { value: "abstract", label: "abstract" },
-                { value: "authors", label: "authors" },
-                { value: "full_text", label: "full_text" },
-                { value: "paper_id", label: "paper_id" },
-                { value: "pmc_id", label: "pmc_id" },
-                { value: "published", label: "published" }
+                { value: "title", label: "Title (title)" },
+                { value: "abstract", label: "Abstract" },
+                { value: "authors", label: "Authors (authors)" },
+                { value: "full_text", label: "Full Text (full_text)" },
+                { value: "paper_id", label: "Paper ID (arXiv / ID)" },
+                { value: "pmc_id", label: "PMC ID (PubMed Central)" },
+                { value: "published", label: "Publication Date" }
             ],
             tables: [
-                { value: "caption", label: "caption" },
-                { value: "body", label: "body" },
-                { value: "paper_title", label: "paper_title" },
-                { value: "table_number", label: "table_number" },
-                { value: "element_id", label: "element_id" },
-                { value: "mentions", label: "mentions" },
-                { value: "context_paragraphs", label: "context_paragraphs" },
-                { value: "paper_id", label: "paper_id" }
+                { value: "caption", label: "Caption (caption)" },
+                { value: "body", label: "Table Data / Content (body)" },
+                { value: "paper_title", label: "Paper Title (paper_title)" },
+                { value: "table_number", label: "Table Number (table_number)" },
+                { value: "element_id", label: "XML Element ID (element_id)" },
+                { value: "mentions", label: "Mention Sentences (mentions)" },
+                { value: "context_paragraphs", label: "Context Paragraphs" },
+                { value: "paper_id", label: "Paper ID" }
             ],
             figures: [
-                { value: "caption", label: "caption" },
-                { value: "paper_title", label: "paper_title" },
-                { value: "figure_number", label: "figure_number" },
-                { value: "element_id", label: "element_id" },
-                { value: "mentions", label: "mentions" },
-                { value: "context_paragraphs", label: "context_paragraphs" },
-                { value: "paper_id", label: "paper_id" },
-                { value: "url", label: "url" }
+                { value: "caption", label: "Caption (caption)" },
+                { value: "paper_title", label: "Paper Title (paper_title)" },
+                { value: "figure_number", label: "Figure Number (figure_number)" },
+                { value: "element_id", label: "XML Element ID (element_id)" },
+                { value: "mentions", label: "Mention Sentences (mentions)" },
+                { value: "context_paragraphs", label: "Context Paragraphs" },
+                { value: "paper_id", label: "Paper ID" },
+                { value: "url", label: "Image URL (url)" }
             ],
             images: [
-                { value: "caption", label: "caption" },
-                { value: "paper_title", label: "paper_title" },
-                { value: "figure_number", label: "figure_number" },
-                { value: "element_id", label: "element_id" },
-                { value: "mentions", label: "mentions" },
-                { value: "context_paragraphs", label: "context_paragraphs" },
-                { value: "paper_id", label: "paper_id" },
-                { value: "url", label: "url" }
+                { value: "caption", label: "Caption (caption)" },
+                { value: "paper_title", label: "Paper Title (paper_title)" },
+                { value: "figure_number", label: "Figure Number (figure_number)" },
+                { value: "element_id", label: "XML Element ID (element_id)" },
+                { value: "mentions", label: "Mention Sentences (mentions)" },
+                { value: "context_paragraphs", label: "Context Paragraphs" },
+                { value: "paper_id", label: "Paper ID" },
+                { value: "url", label: "Image URL (url)" }
             ]
         };
 
         function getFieldOptionsHtml(category) {
             const fields = FIELDS_BY_CATEGORY[category] || FIELDS_BY_CATEGORY.papers;
-            let html = '<option value="" selected>Campo...</option>';
+            let html = '<option value="" selected>Select field...</option>';
             fields.forEach(f => {
                 html += `<option value="${f.value}">${f.label}</option>`;
             });
@@ -269,7 +278,7 @@
                     <input type="text" name="value[]" class="form-control form-control-sm" placeholder="Valore..." value="${value}">
                 </div>
                 <div class="col-md-1 text-center">
-                    <button type="button" class="btn btn-outline-danger btn-sm remove-row" title="Rimuovi">&times;</button>
+                    <button type="button" class="btn btn-outline-danger btn-sm remove-row" title="Remove">&times;</button>
                 </div>
             `;
             

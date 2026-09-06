@@ -3,7 +3,7 @@ import requests
 import feedparser
 import re
 from urllib.parse import quote
-from typing import List
+from typing import List, Optional
 from loguru import logger
 from bs4 import BeautifulSoup
 
@@ -19,7 +19,7 @@ class ArxivSource(DocumentSource):
     @staticmethod
     def _preprocess_html(html: str, paper_id: str) -> str:
         """
-        Preprocessa l'HTML per fixare immagini, formule, CSS e altri elementi.
+        preprocessa l'HTML per fixare immagini, formule, CSS e altri elementi.
         """
         soup = BeautifulSoup(html, 'lxml')
 
@@ -30,12 +30,12 @@ class ArxivSource(DocumentSource):
         head = soup.find('head')
         if head:
             mathjax_config = soup.new_tag('script')
-            mathjax_config.string = '''
+            mathjax_config.string = """
             window.MathJax = {
                 tex: {inlineMath: [['$', '$'], ['\\(', '\\)']]},
                 svg: {fontCache: 'global'}
             };
-            '''
+            """
             head.insert(0, mathjax_config)
 
             mathjax = soup.new_tag(
@@ -132,16 +132,21 @@ class ArxivSource(DocumentSource):
 
         return str(soup)
 
-    def search(self, query: str) -> List[Paper]:
+    def search(self, query: str, limit: Optional[int] = None) -> List[Paper]:
         """
-        Scarica tutti i risultati disponibili per la query, facendo paginazione.
+        Scarica i risultati disponibili per la query, ordinati per data recente
+        (per massimizzare la disponibilità HTML ar5iv/arXiv).
         """
         papers = []
         start = 0
-        batch_size = 200
+        batch_size = min(200, limit) if limit else 200
+
         while True:
             encoded_query = quote(query)
-            url = f"{self.API_URL}?search_query={encoded_query}&start={start}&max_results={batch_size}"
+            url = (
+                f"{self.API_URL}?search_query={encoded_query}&start={start}"
+                f"&max_results={batch_size}&sortBy=submittedDate&sortOrder=descending"
+            )
             response = requests.get(url, headers=config.HEADERS, timeout=30)
             response.raise_for_status()
             feed = feedparser.parse(response.text)
@@ -153,15 +158,18 @@ class ArxivSource(DocumentSource):
                 papers.append(
                     Paper(
                         paper_id=arxiv_id,
-                        title=entry.title.strip(),
+                        title=entry.title.strip().replace("\n", " "),
                         authors=[a.name for a in entry.authors],
-                        abstract=entry.summary.strip(),
+                        abstract=entry.summary.strip().replace("\n", " "),
                         published=entry.published,
                         updated=entry.updated,
                         html_url=f"https://arxiv.org/html/{arxiv_id}",
                         pdf_url=f"https://arxiv.org/pdf/{arxiv_id}.pdf"
                     )
                 )
+                if limit and len(papers) >= limit:
+                    return papers
+
             start += batch_size
             time.sleep(config.DELAY)
 
@@ -209,8 +217,4 @@ class ArxivSource(DocumentSource):
                 e
             )
 
-        logger.debug(
-            "Sleeping after fetch | seconds={}",
-            config.DELAY
-        )
         time.sleep(config.DELAY)

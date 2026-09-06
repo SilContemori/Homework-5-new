@@ -1,3 +1,4 @@
+import os
 import json
 from elasticsearch import Elasticsearch, helpers
 from loguru import logger
@@ -30,67 +31,75 @@ class FiguresIndexer:
                 return
 
         mapping = {
+            "settings": {
+                "number_of_shards": 1,
+                "number_of_replicas": 0
+            },
             "mappings": {
                 "properties": {
                     "url": {"type": "keyword"},
                     "paper_id": {"type": "keyword"},
                     "pmc_id": {"type": "keyword"},
                     "pmid": {"type": "keyword"},
-                    "paper_title": {"type": "text", "analyzer": "standard"},
+                    "source": {"type": "keyword"},
+                    "paper_title": {"type": "text", "analyzer": "english"},
                     "figure_id": {"type": "keyword"},
+                    "table_id": {"type": "keyword"},  # Alias richiesto dal punto 7 della traccia
                     "figure_number": {"type": "integer"},
                     "element_id": {"type": "keyword"},
-                    "caption": {"type": "text", "analyzer": "standard"},
-                    "mentions": {"type": "text", "analyzer": "standard"},
-                    "context_paragraphs": {"type": "text", "analyzer": "standard"}
+                    "caption": {"type": "text", "analyzer": "english"},
+                    "mentions": {"type": "text", "analyzer": "english"},
+                    "context_paragraphs": {"type": "text", "analyzer": "english"}
                 }
             }
         }
 
         self.es.indices.create(index=self.index_name, body=mapping)
-        logger.success(f"Indice '{self.index_name}' creato.")
+        logger.success(f"Indice '{self.index_name}' creato con mapping ottimizzato.")
 
-    def index_from_json(self, json_file):
-        """
-        Indicizza le figure da un file JSON.
-        Usa un _id composito (paper_id + figure_id)
-        per evitare collisioni.
-        """
-
+    def index_from_json(self, json_file, default_source=None):
         with open(json_file, encoding="utf-8") as f:
             figures = json.load(f)
 
         if not figures:
             logger.warning("Nessuna figura trovata nel JSON.")
-            return
+            return 0
 
         actions = []
-        for fig in figures:
+        for idx, fig in enumerate(figures):
             link_id = fig.get("pmc_id") or fig.get("paper_id") or "unk"
+            fig_id = fig.get("figure_id", f"fig_{idx}")
+
+            source = fig.get("source") or default_source
+            if not source:
+                source = "pubmed" if (fig.get("pmc_id") or fig.get("pmid")) else "arxiv"
 
             actions.append({
                 "_index": self.index_name,
-                "_id": f"{link_id}_{fig['figure_id']}",
+                "_id": f"{link_id}_{fig_id}_{idx}",
                 "_source": {
-                    "url": fig["url"],
-                    "paper_id": link_id,
+                    "url": fig.get("url", ""),
+                    "paper_id": str(link_id),
+                    "pmc_id": str(fig.get("pmc_id", "")),
+                    "pmid": str(fig.get("pmid", fig.get("paper_id", ""))),
+                    "source": source,
                     "paper_title": fig.get("paper_title", ""),
-                    "figure_id": fig["figure_id"],
+                    "figure_id": fig_id,
+                    "table_id": fig_id,  # Mantiene conformità pedante al testo del requisito 7
                     "figure_number": fig.get("figure_number", 1),
                     "element_id": fig.get("element_id", ""),
-                    "caption": fig["caption"],
+                    "caption": fig.get("caption", ""),
                     "mentions": fig.get("mentions", []),
-                    "context_paragraphs": fig.get("context_paragraphs", []),
-                    "pmc_id": fig.get("pmc_id", ""),
-                    "pmid": fig.get("pmid", fig.get("paper_id", ""))
+                    "context_paragraphs": fig.get("context_paragraphs", [])
                 }
             })
 
         success, _ = helpers.bulk(self.es, actions)
-        logger.success(f"Indicizzate correttamente {success} figure.")
+        logger.success(f"Indicizzate correttamente {success} figure in '{self.index_name}'.")
+        return success
+
 
 if __name__ == "__main__":
-    import os
     indexer = FiguresIndexer()
     indexer.create_index(reset=True)
     json_path = os.path.join(
@@ -98,4 +107,5 @@ if __name__ == "__main__":
         "..", "..", "..",
         "figures_with_context.json"
     )
-    indexer.index_from_json(json_path)
+    if os.path.exists(json_path):
+        indexer.index_from_json(json_path)

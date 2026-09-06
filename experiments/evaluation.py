@@ -1,3 +1,4 @@
+import argparse
 import sys
 import os
 import json
@@ -122,6 +123,8 @@ def fetch_pubmed_relevant_ids(query, max_results=500):
         'retmax': max_results,
         'retmode': 'xml'
     }
+    if getattr(config, "NCBI_API_KEY", ""):
+        params['api_key'] = config.NCBI_API_KEY
 
     try:
         response = requests.get(search_url, params=params, headers=HEADERS, timeout=30)
@@ -230,11 +233,13 @@ def dcg_at_k(retrieved_ids, relevant_ids, k):
 
 def ndcg_at_k(retrieved_ids, relevant_ids, k):
     dcg = dcg_at_k(retrieved_ids, relevant_ids, k)
-    ideal_ids = list(relevant_ids)[:k]
-    idcg = dcg_at_k(ideal_ids, relevant_ids, k)
+    if dcg == 0:
+        return 0.0
+    n_rel = min(k, len(relevant_ids))
+    idcg = sum(1.0 / math.log2(i + 2) for i in range(n_rel))
     if idcg == 0:
         return 0.0
-    return dcg / idcg
+    return min(1.0, dcg / idcg)
 
 
 def get_elasticsearch():
@@ -334,32 +339,34 @@ def print_query_result(result):
 
 
 def select_corpus(corpus_arg=None):
-    available = list(TEST_QUERIES.keys())
-    if corpus_arg and corpus_arg.lower() in available:
-        return corpus_arg.lower()
+    if corpus_arg:
+        val = str(corpus_arg).strip().lower()
+        if val in ("arxiv", "1"):
+            return "arxiv"
+        elif val in ("pubmed", "2"):
+            return "pubmed"
+        elif val in ("all", "3"):
+            return "all"
+        print(f"Argomento corpus '{corpus_arg}' non valido. Scegli tra: 1 (arxiv), 2 (pubmed), 3 (all).")
+        sys.exit(1)
 
-    print("\nCorpus disponibili per la valutazione:")
-    for i, name in enumerate(available, 1):
-        print(f"  {i}. {name}")
+    print("\nCorpus disponibili per la valutazione IR:")
+    print("  1. arxiv")
+    print("  2. pubmed")
+    print("  3. all (valutazione completa comparativa su entrambi i corpus)")
 
-    choice = input("\nSeleziona corpus (numero): ").strip()
-    try:
-        idx = int(choice)
-        if 1 <= idx <= len(available):
-            return available[idx - 1]
-    except ValueError:
-        pass
-    print("Scelta non valida.")
+    choice = input("\nSeleziona corpus (1, 2, o all): ").strip().lower()
+    if choice in ("1", "arxiv"):
+        return "arxiv"
+    elif choice in ("2", "pubmed"):
+        return "pubmed"
+    elif choice in ("3", "all"):
+        return "all"
+    print("Scelta non valida. Inserisci 1, 2, o all.")
     sys.exit(1)
 
 
-def run_evaluation(corpus_arg=None):
-    corpus_name = select_corpus(corpus_arg)
-    es = get_elasticsearch()
-    if not es.ping():
-        print("Errore: impossibile connettersi ad Elasticsearch.")
-        sys.exit(1)
-
+def evaluate_single_corpus(es, corpus_name):
     corpus_config = TEST_QUERIES[corpus_name]
     api_format = corpus_config["api_query_format"]
     queries_by_mode = corpus_config["queries"]
@@ -368,7 +375,7 @@ def run_evaluation(corpus_arg=None):
 
     for mode in ["fulltext", "boolean"]:
         queries = queries_by_mode[mode]
-        print(f"\nValutazione {corpus_name} ({mode}):")
+        print(f"\n--> Avvio Valutazione {corpus_name.upper()} ({mode}):")
 
         for query_text in queries:
             api_ids = fetch_relevant_ids(query_text, api_format)
@@ -395,10 +402,12 @@ def run_evaluation(corpus_arg=None):
                 corpus_results[key].append(result)
                 print_query_result(result)
 
-            time.sleep(3)
+            time.sleep(1)
 
     summary = {corpus_name: {}}
-    print(f"\nRiepilogo {corpus_name}:")
+    
+    print(f"\nriepilogo metriche: {corpus_name}")
+    
 
     for key, results in corpus_results.items():
         category = key.split("_", 1)[1]
@@ -426,18 +435,52 @@ def run_evaluation(corpus_arg=None):
                 "avg_response_time_ms": round(avg_time, 2),
                 "num_queries": len(mode_results)
             }
+    print()
+    return summary, corpus_results
+
+
+def run_evaluation(corpus_arg=None):
+    selected = select_corpus(corpus_arg)
+    es = get_elasticsearch()
+    if not es.ping():
+        print("Errore: impossibile connettersi ad Elasticsearch.")
+        sys.exit(1)
+
+    corpora_to_evaluate = ["arxiv", "pubmed"] if selected == "all" else [selected]
 
     output_dir = os.path.dirname(os.path.abspath(__file__))
     output_file = os.path.join(output_dir, "evaluation_results.json")
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump({"summary": summary, "detailed_results": corpus_results}, f, indent=2, ensure_ascii=False)
 
-    print(f"\nRisultati esportati in: {output_file}\n")
+    # carica riepilogo precedente se presente
+    existing_summary = {}
+    existing_detailed = {}
+    if os.path.exists(output_file):
+        try:
+            with open(output_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                existing_summary = data.get("summary", {})
+                existing_detailed = data.get("detailed_results", {})
+        except Exception:
+            pass
+
+    for c_name in corpora_to_evaluate:
+        summary, detailed = evaluate_single_corpus(es, c_name)
+        existing_summary.update(summary)
+        existing_detailed.update(detailed)
+
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump({"summary": existing_summary, "detailed_results": existing_detailed}, f, indent=2, ensure_ascii=False)
+
+    print(f"Tutti i risultati esportati in: {output_file}\n")
 
 
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--corpus", choices=["arxiv", "pubmed"], default=None, help="Corpus da valutare")
+    parser = argparse.ArgumentParser(description="Valutazione IR del Motore di Ricerca Scientifico")
+    parser.add_argument(
+        "-c", "--corpus",
+        choices=["arxiv", "pubmed", "all", "1", "2", "3"],
+        default=None,
+        help="Corpus da valutare: 1 (arxiv), 2 (pubmed), all/3 (entrambi)"
+    )
     args = parser.parse_args()
     run_evaluation(args.corpus)

@@ -20,11 +20,24 @@ from app.business.indexer.elastic_indexer import DocumentIndexer
 from app.business.indexer.index_advanced_tables import TablesIndexer
 from app.business.indexer.index_advanced_figures import FiguresIndexer
 from app.utils.format_date import format_date
+from urllib.parse import parse_qs, urlparse
+from scripts.index_all import index_unified_corpora
 
 template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'templates'))
 templates = Jinja2Templates(directory=template_dir)
 
-app = FastAPI()
+tags_metadata = [
+    {"name": "Ricerca & UI", "description": "Interfaccia web e ricerca full-text o booleana."},
+    {"name": "Pipeline & Tasks", "description": "Download ed estrazione dati in background."},
+    {"name": "Redirects", "description": "Gestione link interni agli articoli HTML (evita errori 404 verso PMC e arXiv)."},
+]
+
+app = FastAPI(
+    title="Motore di Ricerca Paper Scientifici",
+    description="API per la ricerca e gestione di articoli scientifici, tabelle e figure (arXiv e PubMed Central).",
+    version="1.0.0",
+    openapi_tags=tags_metadata,
+)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 import warnings
 warnings.filterwarnings("ignore", message=".*TLS with verify_certs=False.*")
@@ -42,57 +55,65 @@ def get_elasticsearch():
     return Elasticsearch(**es_config)
 
 
-def run_build_corpus_task(task_id: str):
+def run_build_corpus_task(task_id: str, source: str = "all"):
     start_dt = datetime.now()
     try:
         task_status[task_id]["status"] = "running"
         task_status[task_id]["started_at"] = start_dt.isoformat()
 
-        if config.SOURCE.lower() == "pubmed":
-            logger.info("Initializing PubMed source...")
-            source = PubmedSource()
-        else:
-            logger.info("Initializing ArXiv source...")
-            source = ArxivSource()
-
-        query = config.QUERY
-        downloader = CorpusDownloader(source, max_workers=1, delay=1.5)
-
-        logger.info(f"Avvio download corpus con query: {query} (Source: {config.SOURCE})")
-        papers = downloader.build(query)
-
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-        output_file = os.path.join(project_root, "corpus.json")
+        results = {}
 
-        papers_data = [
-            {
-                "paper_id": p.paper_id,
-                "title": p.title,
-                "authors": p.authors,
-                "abstract": p.abstract,
-                "published": format_date(p.published),
-                "updated": format_date(p.updated),
-                "html_url": p.html_url,
-                "pdf_url": p.pdf_url,
-                "html_content": p.html_content,
-                "pmc_id": p.pmc_id,
-                "doi": p.doi
-            }
-            for p in papers
-        ]
+        # pubmed
+        if source.lower() in ("all", "pubmed"):
+            logger.info("Initializing PubMed source...")
+            pubmed_source = PubmedSource()
+            downloader = CorpusDownloader(pubmed_source, max_workers=1, delay=1.5)
+            pubmed_papers = downloader.build(config.QUERY_PUBMED)
+            pubmed_dir = os.path.join(project_root, "pubmed")
+            os.makedirs(pubmed_dir, exist_ok=True)
+            pubmed_file = os.path.join(pubmed_dir, "corpus.json")
+            papers_data = [
+                {
+                    "paper_id": p.paper_id,
+                    "title": p.title,
+                    "authors": p.authors,
+                    "abstract": p.abstract,
+                    "published": format_date(p.published),
+                    "updated": format_date(p.updated),
+                    "html_url": p.html_url,
+                    "pdf_url": p.pdf_url,
+                    "html_content": p.html_content,
+                    "pmc_id": p.pmc_id,
+                    "doi": p.doi,
+                    "source": "pubmed"
+                }
+                for p in pubmed_papers
+            ]
+            with open(pubmed_file, 'w', encoding='utf-8') as f:
+                json.dump(papers_data, f, indent=2, ensure_ascii=False)
+            results["pubmed_count"] = len(pubmed_papers)
+            results["pubmed_file"] = pubmed_file
 
-        with open(output_file, 'w', encoding='utf-8') as f:
-            json.dump(papers_data, f, indent=2, ensure_ascii=False)
+        # arxiv
+        if source.lower() in ("all", "arxiv"):
+            arxiv_file = os.path.join(project_root, "arxiv", "corpus.json")
+            if not os.path.exists(arxiv_file):
+                logger.info("arxiv/corpus.json non trovato, avvio pipeline_arxiv...")
+                from scripts.pipeline_arxiv import run_arxiv_pipeline
+                run_arxiv_pipeline(target_papers=500, max_workers=6)
+            if os.path.exists(arxiv_file):
+                with open(arxiv_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                results["arxiv_count"] = len(data)
+                results["arxiv_file"] = arxiv_file
 
         duration = (datetime.now() - start_dt).total_seconds()
-        logger.success(f"[CORPUS BUILD] Task COMPLETED. Paper salvati: {len(papers)}. Durata: {duration:.2f}s")
+        logger.success(f"[CORPUS BUILD] Task COMPLETED. Risultati: {results}. Durata: {duration:.2f}s")
 
         task_status[task_id]["status"] = "completed"
         task_status[task_id]["completed_at"] = datetime.now().isoformat()
-        task_status[task_id]["result"] = {
-            "papers_count": len(papers),
-            "output_file": output_file
-        }
+        task_status[task_id]["result"] = results
 
     except Exception as e:
         duration = (datetime.now() - start_dt).total_seconds()
@@ -102,31 +123,39 @@ def run_build_corpus_task(task_id: str):
         task_status[task_id]["error"] = str(e)
 
 
-def run_extract_tables_task(task_id: str):
+def run_extract_tables_task(task_id: str, source: str = "all"):
     start_dt = datetime.now()
     try:
         task_status[task_id]["status"] = "running"
         task_status[task_id]["started_at"] = start_dt.isoformat()
 
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-        corpus_file = os.path.join(project_root, "corpus.json")
+        pubmed_corpus = os.path.join(project_root, "pubmed", "corpus.json")
+        if not os.path.exists(pubmed_corpus):
+            pubmed_corpus = os.path.join(project_root, "corpus.json")
+        arxiv_corpus = os.path.join(project_root, "arxiv", "corpus.json")
 
-        if not os.path.exists(corpus_file):
-            logger.error("File corpus.json non trovato.")
-            task_status[task_id]["status"] = "failed"
-            task_status[task_id]["completed_at"] = datetime.now().isoformat()
-            task_status[task_id]["error"] = "File corpus.json non trovato. Esegui prima /api/tasks/corpus/build"
-            return
+        total_tables = 0
+        details = {}
 
-        num_tables = extract_detailed_tables(corpus_file)
+        if source.lower() in ("all", "pubmed") and os.path.exists(pubmed_corpus):
+            n = extract_detailed_tables(pubmed_corpus)
+            total_tables += n
+            details["pubmed_tables"] = n
+
+        if source.lower() in ("all", "arxiv") and os.path.exists(arxiv_corpus):
+            n = extract_detailed_tables(arxiv_corpus)
+            total_tables += n
+            details["arxiv_tables"] = n
 
         duration = (datetime.now() - start_dt).total_seconds()
-        logger.success(f"[EXTRACT TABLES] Task COMPLETED. Tabelle estratte: {num_tables}. Durata: {duration:.2f}s")
+        logger.success(f"[EXTRACT TABLES] Task COMPLETED. Tabelle estratte: {total_tables} ({details}). Durata: {duration:.2f}s")
 
         task_status[task_id]["status"] = "completed"
         task_status[task_id]["completed_at"] = datetime.now().isoformat()
         task_status[task_id]["result"] = {
-            "tables_count": num_tables
+            "tables_count": total_tables,
+            "details": details
         }
 
     except Exception as e:
@@ -137,31 +166,39 @@ def run_extract_tables_task(task_id: str):
         task_status[task_id]["error"] = str(e)
 
 
-def run_extract_figures_task(task_id: str):
+def run_extract_figures_task(task_id: str, source: str = "all"):
     start_dt = datetime.now()
     try:
         task_status[task_id]["status"] = "running"
         task_status[task_id]["started_at"] = start_dt.isoformat()
 
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-        corpus_file = os.path.join(project_root, "corpus.json")
+        pubmed_corpus = os.path.join(project_root, "pubmed", "corpus.json")
+        if not os.path.exists(pubmed_corpus):
+            pubmed_corpus = os.path.join(project_root, "corpus.json")
+        arxiv_corpus = os.path.join(project_root, "arxiv", "corpus.json")
 
-        if not os.path.exists(corpus_file):
-            logger.error("File corpus.json non trovato.")
-            task_status[task_id]["status"] = "failed"
-            task_status[task_id]["completed_at"] = datetime.now().isoformat()
-            task_status[task_id]["error"] = "File corpus.json non trovato. Esegui prima /api/tasks/corpus/build"
-            return
+        total_figures = 0
+        details = {}
 
-        total = extract_detailed_figures(corpus_file)
+        if source.lower() in ("all", "pubmed") and os.path.exists(pubmed_corpus):
+            n = extract_detailed_figures(pubmed_corpus)
+            total_figures += n
+            details["pubmed_figures"] = n
+
+        if source.lower() in ("all", "arxiv") and os.path.exists(arxiv_corpus):
+            n = extract_detailed_figures(arxiv_corpus)
+            total_figures += n
+            details["arxiv_figures"] = n
 
         duration = (datetime.now() - start_dt).total_seconds()
-        logger.success(f"[EXTRACT FIGURES] Task COMPLETED. Figure estratte: {total}. Durata: {duration:.2f}s")
+        logger.success(f"[EXTRACT FIGURES] Task COMPLETED. Figure estratte: {total_figures} ({details}). Durata: {duration:.2f}s")
 
         task_status[task_id]["status"] = "completed"
         task_status[task_id]["completed_at"] = datetime.now().isoformat()
         task_status[task_id]["result"] = {
-            "figures_count": total
+            "figures_count": total_figures,
+            "details": details
         }
 
     except Exception as e:
@@ -172,33 +209,37 @@ def run_extract_figures_task(task_id: str):
         task_status[task_id]["error"] = str(e)
 
 
-def run_index_papers_task(task_id: str):
+def run_index_papers_task(task_id: str, source: str = "all"):
     start_dt = datetime.now()
     try:
         task_status[task_id]["status"] = "running"
         task_status[task_id]["started_at"] = start_dt.isoformat()
 
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-        corpus_file = os.path.join(project_root, "corpus.json")
-
-        if not os.path.exists(corpus_file):
-            logger.error("File corpus.json non trovato.")
-            task_status[task_id]["status"] = "failed"
-            task_status[task_id]["completed_at"] = datetime.now().isoformat()
-            task_status[task_id]["error"] = "File corpus.json non trovato. Esegui prima /api/tasks/corpus/build"
-            return
+        pubmed_corpus = os.path.join(project_root, "pubmed", "corpus.json")
+        if not os.path.exists(pubmed_corpus):
+            pubmed_corpus = os.path.join(project_root, "corpus.json")
+        arxiv_corpus = os.path.join(project_root, "arxiv", "corpus.json")
 
         indexer = DocumentIndexer()
-        indexer.create_index(reset=True)
-        indexer.index_data(corpus_file)
+        if source.lower() == "all":
+            indexer.create_index(reset=True)
+            if os.path.exists(pubmed_corpus):
+                indexer.index_data(pubmed_corpus)
+            if os.path.exists(arxiv_corpus):
+                indexer.index_data(arxiv_corpus)
+        elif source.lower() == "pubmed" and os.path.exists(pubmed_corpus):
+            indexer.index_data(pubmed_corpus)
+        elif source.lower() == "arxiv" and os.path.exists(arxiv_corpus):
+            indexer.index_data(arxiv_corpus)
 
         duration = (datetime.now() - start_dt).total_seconds()
-        logger.success(f"[INDEX PAPERS] Task COMPLETED. Indicizzazione completata. Durata: {duration:.2f}s")
+        logger.success(f"[INDEX PAPERS] Task COMPLETED. Durata: {duration:.2f}s")
 
         task_status[task_id]["status"] = "completed"
         task_status[task_id]["completed_at"] = datetime.now().isoformat()
         task_status[task_id]["result"] = {
-            "message": "Indicizzazione paper completata"
+            "message": f"Indicizzazione paper ({source}) completata con successo."
         }
 
     except Exception as e:
@@ -209,33 +250,37 @@ def run_index_papers_task(task_id: str):
         task_status[task_id]["error"] = str(e)
 
 
-def run_index_tables_task(task_id: str):
+def run_index_tables_task(task_id: str, source: str = "all"):
     start_dt = datetime.now()
     try:
         task_status[task_id]["status"] = "running"
         task_status[task_id]["started_at"] = start_dt.isoformat()
 
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-        tables_file = os.path.join(project_root, "tables_with_context.json")
-
-        if not os.path.exists(tables_file):
-            logger.error("File tables_with_context.json non trovato.")
-            task_status[task_id]["status"] = "failed"
-            task_status[task_id]["completed_at"] = datetime.now().isoformat()
-            task_status[task_id]["error"] = "File tables_with_context.json non trovato. Esegui prima /api/tasks/extract/tables"
-            return
+        pubmed_tables = os.path.join(project_root, "pubmed", "tables_with_context.json")
+        if not os.path.exists(pubmed_tables):
+            pubmed_tables = os.path.join(project_root, "tables_with_context.json")
+        arxiv_tables = os.path.join(project_root, "arxiv", "tables_with_context.json")
 
         indexer = TablesIndexer()
-        indexer.create_index(reset=True)
-        indexer.index_from_json(tables_file)
+        if source.lower() == "all":
+            indexer.create_index(reset=True)
+            if os.path.exists(pubmed_tables):
+                indexer.index_from_json(pubmed_tables)
+            if os.path.exists(arxiv_tables):
+                indexer.index_from_json(arxiv_tables)
+        elif source.lower() == "pubmed" and os.path.exists(pubmed_tables):
+            indexer.index_from_json(pubmed_tables)
+        elif source.lower() == "arxiv" and os.path.exists(arxiv_tables):
+            indexer.index_from_json(arxiv_tables)
 
         duration = (datetime.now() - start_dt).total_seconds()
-        logger.success(f"[INDEX TABLES] Task COMPLETED. Indicizzazione tabelle completata. Durata: {duration:.2f}s")
+        logger.success(f"[INDEX TABLES] Task COMPLETED. Durata: {duration:.2f}s")
 
         task_status[task_id]["status"] = "completed"
         task_status[task_id]["completed_at"] = datetime.now().isoformat()
         task_status[task_id]["result"] = {
-            "message": "Indicizzazione tabelle completata"
+            "message": f"Indicizzazione tabelle ({source}) completata con successo."
         }
 
     except Exception as e:
@@ -246,33 +291,37 @@ def run_index_tables_task(task_id: str):
         task_status[task_id]["error"] = str(e)
 
 
-def run_index_figures_task(task_id: str):
+def run_index_figures_task(task_id: str, source: str = "all"):
     start_dt = datetime.now()
     try:
         task_status[task_id]["status"] = "running"
         task_status[task_id]["started_at"] = start_dt.isoformat()
 
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-        figures_file = os.path.join(project_root, "figures_with_context.json")
-
-        if not os.path.exists(figures_file):
-            logger.error("File figures_with_context.json non trovato.")
-            task_status[task_id]["status"] = "failed"
-            task_status[task_id]["completed_at"] = datetime.now().isoformat()
-            task_status[task_id]["error"] = "File figures_with_context.json non trovato. Esegui prima /api/tasks/extract/figures"
-            return
+        pubmed_figures = os.path.join(project_root, "pubmed", "figures_with_context.json")
+        if not os.path.exists(pubmed_figures):
+            pubmed_figures = os.path.join(project_root, "figures_with_context.json")
+        arxiv_figures = os.path.join(project_root, "arxiv", "figures_with_context.json")
 
         indexer = FiguresIndexer()
-        indexer.create_index(reset=True)
-        indexer.index_from_json(figures_file)
+        if source.lower() == "all":
+            indexer.create_index(reset=True)
+            if os.path.exists(pubmed_figures):
+                indexer.index_from_json(pubmed_figures)
+            if os.path.exists(arxiv_figures):
+                indexer.index_from_json(arxiv_figures)
+        elif source.lower() == "pubmed" and os.path.exists(pubmed_figures):
+            indexer.index_from_json(pubmed_figures)
+        elif source.lower() == "arxiv" and os.path.exists(arxiv_figures):
+            indexer.index_from_json(arxiv_figures)
 
         duration = (datetime.now() - start_dt).total_seconds()
-        logger.success(f"[INDEX FIGURES] Task COMPLETED. Indicizzazione figure completata. Durata: {duration:.2f}s")
+        logger.success(f"[INDEX FIGURES] Task COMPLETED. Durata: {duration:.2f}s")
 
         task_status[task_id]["status"] = "completed"
         task_status[task_id]["completed_at"] = datetime.now().isoformat()
         task_status[task_id]["result"] = {
-            "message": "Indicizzazione figure completata"
+            "message": f"Indicizzazione figure ({source}) completata con successo."
         }
 
     except Exception as e:
@@ -283,7 +332,30 @@ def run_index_figures_task(task_id: str):
         task_status[task_id]["error"] = str(e)
 
 
-@app.get('/', response_class=HTMLResponse)
+def run_index_all_task(task_id: str):
+    start_dt = datetime.now()
+    try:
+        task_status[task_id]["status"] = "running"
+        task_status[task_id]["started_at"] = start_dt.isoformat()
+
+        res = index_unified_corpora()
+
+        duration = (datetime.now() - start_dt).total_seconds()
+        logger.success(f"[INDEX ALL] Task COMPLETED. Durata: {duration:.2f}s. Risultati: {res}")
+
+        task_status[task_id]["status"] = "completed"
+        task_status[task_id]["completed_at"] = datetime.now().isoformat()
+        task_status[task_id]["result"] = res
+
+    except Exception as e:
+        duration = (datetime.now() - start_dt).total_seconds()
+        logger.error(f"[INDEX ALL] Errore dopo {duration:.2f}s: {e}")
+        task_status[task_id]["status"] = "failed"
+        task_status[task_id]["completed_at"] = datetime.now().isoformat()
+        task_status[task_id]["error"] = str(e)
+
+
+@app.get('/', response_class=HTMLResponse, tags=["Ricerca & UI"], summary="Home page", description="Pagina iniziale con form di ricerca.")
 async def index(request: Request):
     return templates.TemplateResponse(
         request=request,
@@ -294,15 +366,15 @@ async def index(request: Request):
     )
 
 
-@app.get('/search', response_class=HTMLResponse)
+@app.get('/search', response_class=HTMLResponse, tags=["Ricerca & UI"], summary="Cerca", description="Esegue la ricerca su paper, tabelle o figure con filtri e logica booleana.")
 async def search(request: Request):
-    from urllib.parse import parse_qs, urlparse
     
     raw_query_string = request.url.query
     parsed_params = parse_qs(raw_query_string, keep_blank_values=True)
     
     q = parsed_params.get('q', [None])[0]
     category = parsed_params.get('category', ['papers'])[0]
+    source_filter = parsed_params.get('source', ['all'])[0].strip().lower()
     try:
         size = int(parsed_params.get('size', [10])[0])
     except ValueError:
@@ -337,21 +409,35 @@ async def search(request: Request):
 
     if q and q.strip():
         if category == 'tables':
-            search_fields = ["caption^2", "body"]
+            search_fields = ["caption^5", "body^4", "mentions^2", "context_paragraphs^0.2"]
         elif category in ['figures', 'images']:
-            search_fields = ["caption"]
+            search_fields = ["caption^5", "mentions^3", "context_paragraphs^0.2"]
         else:
-            search_fields = ["title^2", "abstract", "full_text", "authors"]
+            search_fields = ["title^3", "abstract^2", "full_text", "authors"]
 
-        body = {
-            "query": {
-                "multi_match": {
-                    "query": q.strip(),
-                    "fields": search_fields
-                }
-            },
-            "size": size
-        }
+        clean_q = q.strip()
+        is_boolean = any(op in clean_q for op in [" AND ", " OR ", " NOT "])
+        if is_boolean:
+            body = {
+                "query": {
+                    "query_string": {
+                        "query": clean_q,
+                        "fields": search_fields,
+                        "default_operator": "AND"
+                    }
+                },
+                "size": size
+            }
+        else:
+            body = {
+                "query": {
+                    "multi_match": {
+                        "query": clean_q,
+                        "fields": search_fields
+                    }
+                },
+                "size": size
+            }
 
     elif values:
         groups = []
@@ -375,21 +461,21 @@ async def search(request: Request):
                     cond = {
                         "multi_match": {
                             "query": val.strip(),
-                            "fields": ["caption^2", "body"]
+                            "fields": ["caption^5", "body^4", "mentions^2", "context_paragraphs^0.2"]
                         }
                     }
                 elif category in ['figures', 'images']:
                     cond = {
                         "multi_match": {
                             "query": val.strip(),
-                            "fields": ["caption"]
+                            "fields": ["caption^5", "mentions^3", "context_paragraphs^0.2"]
                         }
                     }
                 else:
                     cond = {
                         "multi_match": {
                             "query": val.strip(),
-                            "fields": ["title^2", "abstract", "full_text", "authors"]
+                            "fields": ["title^3", "abstract^2", "full_text", "authors"]
                         }
                     }
             else:
@@ -469,8 +555,25 @@ async def search(request: Request):
             }
         )
 
+    if body and source_filter in ['arxiv', 'pubmed']:
+        inner_query = body.get("query", {"match_all": {}})
+        if "bool" in inner_query:
+            if "filter" in inner_query["bool"]:
+                inner_query["bool"]["filter"].append({"term": {"source": source_filter}})
+            else:
+                inner_query["bool"]["filter"] = [{"term": {"source": source_filter}}]
+        else:
+            body["query"] = {
+                "bool": {
+                    "must": [inner_query],
+                    "filter": [{"term": {"source": source_filter}}]
+                }
+            }
+
     try:
         es = get_elasticsearch()
+        if category in ['tables', 'figures', 'images'] and 'min_score' not in body:
+            body['min_score'] = 4.0
         res = es.search(index=index_name, body=body)
         hits = res['hits']['hits']
     except Exception as e:
@@ -486,6 +589,8 @@ async def search(request: Request):
     query_display = q.strip() if (q and q.strip()) else " ".join(query_display_parts)
     if not query_display:
         query_display = "Filtri applicati"
+    if source_filter in ['arxiv', 'pubmed']:
+        query_display += f" [{source_filter.upper()}]"
 
     return templates.TemplateResponse(
         request=request,
@@ -493,12 +598,13 @@ async def search(request: Request):
         context={
             'hits': hits,
             'category': category,
-            'query': query_display
+            'query': query_display,
+            'source': source_filter
         }
     )
 
 
-@app.get('/paper/table/{table_path:path}')
+@app.get('/paper/table/{table_path:path}', tags=["Redirects"], summary="Redirect tabella PMC", description="Reindirizza alla tabella su PubMed Central.")
 async def redirect_paper_table(table_path: str):
     element_id = table_path.strip("/").split("/")[-1]
     logger.info(f"Fallback redirect requested for table element_id: {element_id}")
@@ -533,7 +639,7 @@ async def redirect_paper_table(table_path: str):
     return RedirectResponse(url="https://pmc.ncbi.nlm.nih.gov/", status_code=302)
 
 
-@app.get('/paper/figure/{figure_path:path}')
+@app.get('/paper/figure/{figure_path:path}', tags=["Redirects"], summary="Redirect figura PMC", description="Reindirizza alla figura su PubMed Central.")
 async def redirect_paper_figure(figure_path: str):
     fig_id = figure_path.strip("/").split("/")[-1]
     logger.info(f"Fallback redirect requested for figure: {fig_id}")
@@ -568,41 +674,41 @@ async def redirect_paper_figure(figure_path: str):
     return RedirectResponse(url="https://pmc.ncbi.nlm.nih.gov/", status_code=302)
 
 
-@app.get('/articles/{path:path}')
+@app.get('/articles/{path:path}', tags=["Redirects"], summary="Redirect articolo PMC", description="Reindirizza i link relativi agli articoli su PubMed Central.")
 async def redirect_pmc_articles(path: str):
     logger.info(f"Fallback redirecting /articles/{path} to PMC...")
     return RedirectResponse(url=f"https://pmc.ncbi.nlm.nih.gov/articles/{path}", status_code=302)
 
 
-@app.get('/pmc/articles/{path:path}')
+@app.get('/pmc/articles/{path:path}', tags=["Redirects"], summary="Redirect articolo PMC", description="Reindirizza i link relativi /pmc/articles/ a PubMed Central.")
 async def redirect_pmc_full_articles(path: str):
     logger.info(f"Fallback redirecting /pmc/articles/{path} to PMC...")
     return RedirectResponse(url=f"https://pmc.ncbi.nlm.nih.gov/articles/{path}", status_code=302)
 
 
-@app.get('/instance/{path:path}')
+@app.get('/instance/{path:path}', tags=["Redirects"], summary="Redirect istanze PMC", description="Reindirizza link interni PMC.")
 async def redirect_pmc_instance(path: str):
     logger.info(f"Fallback redirecting /instance/{path} to PMC...")
     return RedirectResponse(url=f"https://pmc.ncbi.nlm.nih.gov/articles/instance/{path}", status_code=302)
 
 
-@app.get('/about/{path:path}')
-@app.get('/about')
+@app.get('/about/{path:path}', tags=["Redirects"], summary="Redirect About PMC", description="Reindirizza alla pagina About di PMC.")
+@app.get('/about', tags=["Redirects"], summary="Redirect About PMC", description="Reindirizza alla pagina About di PMC.")
 async def redirect_pmc_about(path: str = ""):
     logger.info(f"Fallback redirecting /about/{path} to PMC...")
     suffix = f"/{path}" if path else ""
     return RedirectResponse(url=f"https://pmc.ncbi.nlm.nih.gov/about{suffix}", status_code=302)
 
 
-@app.get('/pmc/about/{path:path}')
-@app.get('/pmc/about')
+@app.get('/pmc/about/{path:path}', tags=["Redirects"], summary="Redirect About PMC", description="Reindirizza alla pagina About di PMC.")
+@app.get('/pmc/about', tags=["Redirects"], summary="Redirect About PMC", description="Reindirizza alla pagina About di PMC.")
 async def redirect_pmc_about_nested(path: str = ""):
     logger.info(f"Fallback redirecting /pmc/about/{path} to PMC...")
     suffix = f"/{path}" if path else ""
     return RedirectResponse(url=f"https://pmc.ncbi.nlm.nih.gov/about{suffix}", status_code=302)
 
 
-@app.get('/pdf/{path:path}')
+@app.get('/pdf/{path:path}', tags=["Redirects"], summary="Redirect PDF arXiv", description="Reindirizza al PDF originale su arXiv.")
 async def redirect_arxiv_pdf(path: str):
     clean_path = path.strip('/')
     if not clean_path.endswith('.pdf'):
@@ -611,14 +717,14 @@ async def redirect_arxiv_pdf(path: str):
     return RedirectResponse(url=f"https://arxiv.org/pdf/{clean_path}", status_code=302)
 
 
-@app.get('/abs/{path:path}')
+@app.get('/abs/{path:path}', tags=["Redirects"], summary="Redirect Abstract arXiv", description="Reindirizza alla pagina abstract su arXiv.")
 async def redirect_arxiv_abs(path: str):
     clean_path = path.strip('/')
     logger.info(f"Redirecting /abs/{path} to https://arxiv.org/abs/{clean_path}")
     return RedirectResponse(url=f"https://arxiv.org/abs/{clean_path}", status_code=302)
 
 
-@app.get('/paper/{paper_id}', response_class=HTMLResponse)
+@app.get('/paper/{paper_id}', response_class=HTMLResponse, tags=["Ricerca & UI"], summary="Visualizza paper", description="Mostra il testo HTML del paper ed evidenzia tabelle o figure cercate.")
 async def view_paper(
         request: Request,
         paper_id: str,
@@ -689,123 +795,169 @@ async def view_paper(
     )
 
 
-@app.post("/api/tasks/corpus/build")
-async def build_corpus(background_tasks: BackgroundTasks):
+@app.post("/api/tasks/corpus/build", tags=["Pipeline & Tasks"], summary="Download corpus", description="Scarica i paper da PubMed o arXiv.")
+async def build_corpus(
+    background_tasks: BackgroundTasks,
+    source: str = Query("all", description="Sorgente: 'all', 'arxiv' o 'pubmed'")
+):
     task_id = str(uuid.uuid4())
     task_status[task_id] = {
         "task_type": "corpus/build",
+        "source": source,
         "status": "pending",
         "created_at": datetime.now().isoformat()
     }
 
-    background_tasks.add_task(run_build_corpus_task, task_id)
+    background_tasks.add_task(run_build_corpus_task, task_id, source)
 
     return JSONResponse({
         "status": "accepted",
-        "message": "Task avviato in background",
+        "message": f"Task corpus build ({source}) avviato in background",
         "task_id": task_id
     })
 
 
-@app.post("/api/tasks/extract/tables")
-async def extract_tables(background_tasks: BackgroundTasks):
+@app.post("/api/tasks/extract/tables", tags=["Pipeline & Tasks"], summary="Estrai tabelle", description="Estrae tabelle e contesti dai paper.")
+async def extract_tables(
+    background_tasks: BackgroundTasks,
+    source: str = Query("all", description="Sorgente: 'all', 'arxiv' o 'pubmed'")
+):
     task_id = str(uuid.uuid4())
     task_status[task_id] = {
         "task_type": "extract/tables",
+        "source": source,
         "status": "pending",
         "created_at": datetime.now().isoformat()
     }
 
-    background_tasks.add_task(run_extract_tables_task, task_id)
+    background_tasks.add_task(run_extract_tables_task, task_id, source)
 
     return JSONResponse({
         "status": "accepted",
-        "message": "Task avviato in background",
+        "message": f"Task estrazione tabelle ({source}) avviato in background",
         "task_id": task_id
     })
 
 
-@app.post("/api/tasks/extract/figures")
-async def extract_figures(background_tasks: BackgroundTasks):
+@app.post("/api/tasks/extract/figures", tags=["Pipeline & Tasks"], summary="Estrai figure", description="Estrae figure e didascalie dai paper.")
+async def extract_figures(
+    background_tasks: BackgroundTasks,
+    source: str = Query("all", description="Sorgente: 'all', 'arxiv' o 'pubmed'")
+):
     task_id = str(uuid.uuid4())
     task_status[task_id] = {
         "task_type": "extract/figures",
+        "source": source,
         "status": "pending",
         "created_at": datetime.now().isoformat()
     }
 
-    background_tasks.add_task(run_extract_figures_task, task_id)
+    background_tasks.add_task(run_extract_figures_task, task_id, source)
 
     return JSONResponse({
         "status": "accepted",
-        "message": "Task avviato in background",
+        "message": f"Task estrazione figure ({source}) avviato in background",
         "task_id": task_id
     })
 
 
-@app.post("/api/tasks/index/papers")
-async def index_papers(background_tasks: BackgroundTasks):
+@app.post("/api/tasks/index/papers", tags=["Pipeline & Tasks"], summary="Indicizza paper", description="Indicizza i paper su Elasticsearch.")
+async def index_papers(
+    background_tasks: BackgroundTasks,
+    source: str = Query("all", description="Sorgente: 'all', 'arxiv' o 'pubmed'")
+):
     task_id = str(uuid.uuid4())
     task_status[task_id] = {
         "task_type": "index/papers",
+        "source": source,
         "status": "pending",
         "created_at": datetime.now().isoformat()
     }
 
-    background_tasks.add_task(run_index_papers_task, task_id)
+    background_tasks.add_task(run_index_papers_task, task_id, source)
 
     return JSONResponse({
         "status": "accepted",
-        "message": "Task avviato in background",
+        "message": f"Task indicizzazione paper ({source}) avviato in background",
         "task_id": task_id
     })
 
 
-@app.post("/api/tasks/index/tables")
-async def index_tables(background_tasks: BackgroundTasks):
+@app.post("/api/tasks/index/tables", tags=["Pipeline & Tasks"], summary="Indicizza tabelle", description="Indicizza le tabelle su Elasticsearch.")
+async def index_tables(
+    background_tasks: BackgroundTasks,
+    source: str = Query("all", description="Sorgente: 'all', 'arxiv' o 'pubmed'")
+):
     task_id = str(uuid.uuid4())
     task_status[task_id] = {
         "task_type": "index/tables",
+        "source": source,
         "status": "pending",
         "created_at": datetime.now().isoformat()
     }
 
-    background_tasks.add_task(run_index_tables_task, task_id)
+    background_tasks.add_task(run_index_tables_task, task_id, source)
 
     return JSONResponse({
         "status": "accepted",
-        "message": "Task avviato in background",
+        "message": f"Task indicizzazione tabelle ({source}) avviato in background",
         "task_id": task_id
     })
 
 
-@app.post("/api/tasks/index/figures")
-async def index_figures(background_tasks: BackgroundTasks):
+@app.post("/api/tasks/index/figures", tags=["Pipeline & Tasks"], summary="Indicizza figure", description="Indicizza le figure su Elasticsearch.")
+async def index_figures(
+    background_tasks: BackgroundTasks,
+    source: str = Query("all", description="Sorgente: 'all', 'arxiv' o 'pubmed'")
+):
     task_id = str(uuid.uuid4())
     task_status[task_id] = {
         "task_type": "index/figures",
+        "source": source,
         "status": "pending",
         "created_at": datetime.now().isoformat()
     }
 
-    background_tasks.add_task(run_index_figures_task, task_id)
+    background_tasks.add_task(run_index_figures_task, task_id, source)
 
     return JSONResponse({
         "status": "accepted",
-        "message": "Task avviato in background",
+        "message": f"Task indicizzazione figure ({source}) avviato in background",
         "task_id": task_id
     })
 
 
-@app.get("/api/tasks/status")
+@app.post("/api/tasks/index/all", tags=["Pipeline & Tasks"], summary="Indicizza tutto", description="Indicizza tutti i paper, tabelle e figure di entrambe le fonti.")
+async def index_all_unified(background_tasks: BackgroundTasks):
+    task_id = str(uuid.uuid4())
+    task_status[task_id] = {
+        "task_type": "index/all",
+        "source": "all",
+        "status": "pending",
+        "created_at": datetime.now().isoformat()
+    }
+
+    background_tasks.add_task(run_index_all_task, task_id)
+
+    return JSONResponse({
+        "status": "accepted",
+        "message": "Task indicizzazione unificata (tutti i corpora, tabelle e figure) avviato in background",
+        "task_id": task_id
+    })
+
+
+@app.get("/api/tasks/status", tags=["Pipeline & Tasks"], summary="Stato dataset", description="Controlla se i file JSON esistono su disco.")
 async def get_tasks_status():
     base_dir = os.path.join(os.path.dirname(__file__), "..", "..")
     base_dir = os.path.abspath(base_dir)
 
     files_status = {
-        "corpus.json": os.path.exists(os.path.join(base_dir, "corpus.json")),
-        "tables_with_context.json": os.path.exists(os.path.join(base_dir, "tables_with_context.json")),
-        "figures_with_context.json": os.path.exists(os.path.join(base_dir, "figures_with_context.json"))
+        "pubmed/corpus.json": os.path.exists(os.path.join(base_dir, "pubmed", "corpus.json")),
+        "pubmed/tables_with_context.json": os.path.exists(os.path.join(base_dir, "pubmed", "tables_with_context.json")),
+        "pubmed/figures_with_context.json": os.path.exists(os.path.join(base_dir, "pubmed", "figures_with_context.json")),
+        "arxiv/corpus.json": os.path.exists(os.path.join(base_dir, "arxiv", "corpus.json")),
+        "arxiv/tables_with_context.json": os.path.exists(os.path.join(base_dir, "arxiv", "tables_with_context.json")),
+        "arxiv/figures_with_context.json": os.path.exists(os.path.join(base_dir, "arxiv", "figures_with_context.json"))
     }
 
     return JSONResponse({
@@ -814,7 +966,7 @@ async def get_tasks_status():
     })
 
 
-@app.get("/api/tasks/{task_id}")
+@app.get("/api/tasks/{task_id}", tags=["Pipeline & Tasks"], summary="Stato task", description="Controlla lo stato di avanzamento di un task in background.")
 async def get_task_by_id(task_id: str):
     if task_id not in task_status:
         return JSONResponse({

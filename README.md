@@ -1,359 +1,252 @@
-# HW5 — Ingegneria dei Dati
+# Academic Search Engine — HW5 (Ingegneria dei Dati)
 
-Motore di ricerca e retrieval accademico full-text basato su **FastAPI** ed **Elasticsearch**, progettato per l'esplorazione avanzata di articoli scientifici da due sorgenti eterogenee: **arXiv** e **PubMed Central (PMC)**, con estrazione e arricchimento contestuale di **tabelle** e **figure**.
+[![Elasticsearch](https://img.shields.io/badge/Elasticsearch-8.x-005571?logo=elasticsearch)](https://www.elastic.co/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
+[![Cluster Health](https://img.shields.io/badge/Cluster%20Health-GREEN-success)](#)
+[![Indexed Entities](https://img.shields.io/badge/Indexed%20Entities-9%2C950-blue)](#)
+[![Corpus](https://img.shields.io/badge/Corpora-PubMed%20%2B%20arXiv-orange)](#)
+
+Motore di ricerca accademico full-text e booleano ad alte prestazioni basato su **FastAPI** ed **Elasticsearch 8.x**, progettato per l'esplorazione avanzata di articoli scientifici da due sorgenti eterogenee: **arXiv** e **PubMed Central (PMC)**, con estrazione e indicizzazione di primo livello di **tabelle** e **figure** con arricchimento contestuale.
 
 ---
 
 ## Indice
 
-- [Obiettivi del Progetto](#obiettivi-del-progetto)
-- [Pipeline di Elaborazione e Decisioni di Progetto](#pipeline-di-elaborazione-e-decisioni-di-progetto)
-  - [1. Estrazione Documenti](#1-estrazione-documenti)
-  - [2. Estrazione Tabelle](#2-estrazione-tabelle)
-  - [3. Estrazione Figure e Contesto](#3-estrazione-figure-e-contesto)
-  - [4. Indicizzazione Elasticsearch](#4-indicizzazione-elasticsearch)
-  - [5. Motore di Ricerca e Visualizzatore](#5-motore-di-ricerca-e-visualizzatore)
-- [Architettura del Progetto](#architettura-del-progetto)
-- [Requisiti di Sistema](#requisiti-di-sistema)
-- [Installazione e Configurazione](#installazione-e-configurazione)
-- [Avvio di Elasticsearch](#avvio-di-elasticsearch)
-- [Esecuzione della Pipeline e dell'Applicazione](#esecuzione-della-pipeline-e-dellapplicazione)
-- [Guida alla Ricerca](#guida-alla-ricerca)
-- [Valutazione Sperimentale e Risultati](#valutazione-sperimentale-e-risultati)
-- [Riferimento API](#riferimento-api)
+- [Panoramica e Obiettivi](#panoramica-e-obiettivi)
+- [Galleria e Dimostrazione Visiva (Web & CLI)](#galleria-e-dimostrazione-visiva-web--cli)
+- [Architettura e Struttura Simmetrica](#architettura-e-struttura-simmetrica)
+- [Pipeline di Elaborazione e Scelte Metodologiche](#pipeline-di-elaborazione-e-scelte-metodologiche)
+- [Requisiti e Installazione](#requisiti-e-installazione)
+- [Avvio Rapido (Server Web, CLI, Pipeline)](#avvio-rapido-server-web-cli-pipeline)
+- [Guida alla Ricerca (Web & CLI)](#guida-alla-ricerca-web--cli)
+- [Riferimento API (FastAPI)](#riferimento-completo-api-fastapi)
+- [Valutazione Sperimentale e Benchmark IR](#valutazione-sperimentale-e-benchmark-ir)
 
 ---
 
-## Obiettivi del Progetto
+## Panoramica e Obiettivi
 
-L'obiettivo dell'Homework 5 è realizzare un sistema end-to-end per l'indicizzazione e il retrieval semantico/booleano di letteratura scientifica proveniente da due piattaforme con strutture e formati distinti (**arXiv** e **PubMed**).
+L'obiettivo dell'Homework 5 è sviluppare un sistema di Information Retrieval end-to-end su pubblicazioni scientifiche provenienti da due sorgenti primarie:
+1. **PubMed Central (PMC)**: letteratura biomedica in formato JATS XML / HTML strutturato (705 paper indicizzati).
+2. **arXiv**: letteratura scientifica di informatica e data engineering con versione HTML ufficiale (505 paper indicizzati).
 
-Il flusso si articola in 5 fasi principali:
-
-1. **[Estrazione Documenti](#1-estrazione-documenti)** :white_check_mark:
-2. **[Estrazione Tabelle](#2-estrazione-tabelle)** :white_check_mark:
-3. **[Estrazione Figure e Capitoli](#3-estrazione-figure-e-contesto)** :white_check_mark:
-4. **[Indicizzazione su Elasticsearch](#4-indicizzazione-elasticsearch)** :white_check_mark:
-5. **[Ricerca e Visualizzazione Avanzata](#5-motore-di-ricerca-e-visualizzatore)** :white_check_mark:
+Il sistema tratta documenti, tabelle e figure come entità di prima classe con indici Elasticsearch dedicati (`papers_index`, `tables_index`, `figures_index`), supportando sia ricerche testuali libere sia query booleane complesse (WHERE, AND, OR, NOT) con ranking BM25 ottimizzato.
 
 ---
 
-## Pipeline di Elaborazione e Decisioni di Progetto
+## Galleria e Dimostrazione Visiva (Web & CLI)
 
-### 1. Estrazione Documenti
+### 1. Interfaccia Web — Ricerca Unificata & Costruttore Booleano
+L'interfaccia principale offre un costruttore dinamico di query che permette di cercare in modalità Full-Text su tutto il documento oppure filtrare per campi specifici (`title`, `authors`, `abstract`, `published`), concatenando clausole logiche e selezionando il corpus di interesse (**Tutti i Corpus**, **Solo arXiv**, **Solo PubMed / PMC**):
 
-Il modulo di acquisizione ([app/business/corpus_builder](file:///z:/home/valerio/project/Homework-5-new-dev/Homework-5-new-dev/Homework-5-new-dev/app/business/corpus_builder)) gestisce in modo unificato le due sorgenti:
-
-- **PubMed Central (PMC)**:
-  - Interroga le API NCBI E-Utilities (`esearch` ed `efetch`).
-  - L'autenticazione tramite `NCBI_API_KEY` (configurata in `.env`) eleva la soglia di rate limit da 3 a 10 richieste/secondo, prevenendo blocchi WAF durante il download massivo.
-  - Per PMC il formato HTML completo è sempre garantito e associato al relativo identificativo univoco `pmc_id`.
-- **arXiv**:
-  - Interroga le arXiv API per ricavare metadati, autori, abstract e identificativo del paper (es. `1805.12319v3`).
-  - Converte gli URL astratti (`abs`) nei corrispettivi endpoint HTML (ar5iv / LaTeXML) e valida l'effettiva disponibilità del documento tramite codice di stato HTTP 200.
-- **Normalizzazione dei Metadati**:
-  - Tutti gli articoli vengono convertiti in un modello comune (`Paper`) che include titolo normalizzato, lista autori, abstract, date di pubblicazione/aggiornamento formattate in ISO, percorsi HTML/PDF e identificativi univoci.
-
-> **Decisione di Progetto (Struttura di Paragrafi e Capitoli)**:
-> Per uniformare la diversa gerarchia HTML tra arXiv (LaTeX) e PMC (JATS XML), un capitolo/sezione è identificato dalle intestazioni `<h2>` e `<h3>` discendenti dal titolo principale `<h1>`. Questa scelta permette di escludere elementi decorativi e definire confini coerenti per l'estrazione dei paragrafi di contesto.
+![Interfaccia Web - Home Page](docs/images/web_search_home.png)
 
 ---
 
-### 2. Estrazione Tabelle
+### 2. Risultati Documenti — Ranking, Snippet e Deep Linking
+I risultati restituiti evidenziano punteggio di rilevanza BM25, sorgente (`ARXIV` o `PUBMED`), autori, data, abstract con evidenziazione e link diretti ai documenti e agli elementi multimediali correlati:
 
-Il modulo [table_context_extractor.py](file:///z:/home/valerio/project/Homework-5-new-dev/Homework-5-new-dev/Homework-5-new-dev/app/business/extractor/table_context_extractor.py) analizza i documenti HTML tramite BeautifulSoup:
-
-- **Individuazione e Risalita Antenati**:
-  - Per arXiv: risale dal tag `<table>` fino al container semantico `.ltx_table` o `<figure>`.
-  - Per PMC: individua i blocchi `<div class="table-wrap">` o `<section>`.
-- **Arricchimento Contestuale**:
-  - Estrazione della didascalia (`caption`, `figcaption`).
-  - Estrazione del corpo tabellare sia in formato strutturato (righe/colonne) sia come testo pulito per l'indicizzazione.
-  - **Menzioni nel testo**: ricerca nel corpo del documento di citazioni esplicite alla tabella (es. `Table 1`, `Table S2`).
-  - **Paragrafi di contesto**: estrazione dei paragrafi limitrofi alla tabella e di quelli contenenti le menzioni, per catturare il significato semantico attribuito dall'autore.
-- **Filtraggio Smart dei Casi Limite**:
-  - Eliminazione di false tabelle usate per formule matematiche inline, allineamenti grafici o layout minori, salvaguardando solo le tabelle con effettivo valore informativo.
-
-I dati estratti confluiscono in `tables_with_context.json`.
+![Risultati Documenti](docs/images/web_results_papers.png)
 
 ---
 
-### 3. Estrazione Figure e Contesto
+### 3. Risultati Tabelle — Caption, Schema Tabellare e Paragrafi di Contesto
+La ricerca su tabelle interroga congiuntamente didascalia, corpo strutturato della tabella, citazioni nel testo (*mentions*) e paragrafi in cui la tabella viene commentata dall'autore:
 
-Il modulo [figure_context_extractor.py](file:///z:/home/valerio/project/Homework-5-new-dev/Homework-5-new-dev/Homework-5-new-dev/app/business/extractor/figure_context_extractor.py) gestisce immagini, grafici e illustrazioni scientifiche:
-
-- **Individuazione Figure**:
-  - Ricerca tag `<img>` e tag container `<figure>` (comuni sia ad arXiv sia a PMC).
-  - Validazione su classi CSS, dimensioni e presenza di elementi descrittivi per scartare icone, loghi o pulsanti di interfaccia.
-- **Metadati e Contesto Estratti**:
-  - Identificativo dell'elemento (es. `S4.F1` per arXiv, `F1` per PMC) e numero progressivo della figura.
-  - Didascalia completa (`caption` / `alt-text`).
-  - **Menzioni nel testo**: scansione di pattern come `Figure 1`, `Fig. 2`, `Figure S1`.
-  - **Paragrafi di contesto**: associazione dei paragrafi dell'articolo in cui la figura viene discussa o richiamata.
-
-I dati estratti confluiscono in `figures_with_context.json`.
+![Risultati Tabelle](docs/images/web_results_tables.png)
 
 ---
 
-### 4. Indicizzazione Elasticsearch
+### 4. Visualizzatore Paper — Scroll Automatico ed Evidenziazione
+Cliccando su un risultato, il visualizzatore apre il paper completo e posiziona automaticamente il viewport sull'elemento ricercato, applicando l'evidenziazione ai termini pertinenti:
 
-L'indicizzazione ([app/business/indexer](file:///z:/home/valerio/project/Homework-5-new-dev/Homework-5-new-dev/Homework-5-new-dev/app/business/indexer)) organizza i dati su tre indici dedicati:
-
-| Indice | Scopo | Campi Chiave e Analyzer |
-|---|---|---|
-| **`papers_index`** | Documenti e articoli completi | `paper_id` (keyword), `pmc_id` (keyword), `title` (text con analyzer `english`), `authors` (text), `abstract` (text `english`), `full_text` (text `english`), `published` (date), `html_content` (text) |
-| **`tables_index`** | Tabelle con contesto | `caption` (text `english`), `body` (text), `table_number` (integer), `element_id` (keyword), `mentions` (text), `context_paragraphs` (text), `paper_id` (keyword), `paper_title` (text) |
-| **`figures_index`** | Figure e illustrazioni | `caption` (text `english`), `figure_number` (integer), `element_id` (keyword), `mentions` (text), `context_paragraphs` (text), `paper_id` (keyword), `paper_title` (text) |
-
-- **Gestione Connessione**: Connessione sicura a Elasticsearch (host locale o remoto) con autenticazione via credenziali o token.
-- **Bulk Indexing**: Inserimento ad alte prestazioni tramite le API bulk di Elasticsearch con gestione di batch e retry.
+![Visualizzatore Documento con Evidenziazione](docs/images/web_document_table_view.png)
 
 ---
 
-### 5. Motore di Ricerca e Visualizzatore
+### 5. Interfaccia da Linea di Comando (CLI)
+Il sistema è interamente fruibile da terminale tramite `cli_search.py`, sia in **modalità interattiva** (`python cli_search.py -i`) sia tramite **argomenti CLI** per interrogare documenti, tabelle e figure:
 
-Implementato in FastAPI ([app/services/routes.py](file:///z:/home/valerio/project/Homework-5-new-dev/Homework-5-new-dev/Homework-5-new-dev/app/services/routes.py)):
-
-- **Costruttore di Query Booleane Avanzato**:
-  - Supporto per clausole `WHERE`, `AND`, `OR`, `NOT`.
-  - Operatori supportati:
-    - `match`: full-text search con fuzzy matching automatico (`AUTO`) per tollerare refusi.
-    - `phrase`: corrispondenza della sequenza esatta di parole (`match_phrase`).
-    - `term`: corrispondenza puntuale su identificativi, numeri o date.
-  - **Filtraggio dinamico per categoria**: quando l'utente seleziona una categoria (es. Tabelle), l'interfaccia e il backend propongono ed eseguono la ricerca esclusivamente sui campi pertinenti (`caption`, `body`, ecc.), garantendo precisione ed evitando falsi positivi da campi generici del paper.
-- **Visualizzatore Paper con Deep Linking ([paper.html](file:///z:/home/valerio/project/Homework-5-new-dev/Homework-5-new-dev/Homework-5-new-dev/templates/paper.html))**:
-  - **Scroll automatico e outline**: cliccando su una tabella o figura dai risultati, il browser atterra direttamente sull'elemento con bordo di risalto.
-  - **Highlighter in tempo reale**: parsing delle clausole booleane ed evidenziazione ad alto contrasto (rosso coordinato con il tema) dei termini cercati nei punti esatti (titolo, abstract, autori, didascalie o testo).
-  - **Supporto multi-formato**: selettori intelligenti compatibili sia con la struttura HTML di PubMed Central (`.contrib-group`, `.front-matter`) sia con arXiv (`.ltx_authors`, `.ltx_title_document`, `.ltx_table`).
+![Interfaccia CLI da Terminale](docs/images/cli_search_demo.png)
 
 ---
 
-## Architettura del Progetto
+## Architettura e Struttura Simmetrica
+
+Il progetto adotta un'organizzazione simmetrica e pulita del filesystem:
 
 ```text
-├── airxv/                        # Corpus e dati estratti di arXiv (storage)
-│   ├── corpus.json               # Metadati e testi dei paper arXiv
-│   ├── tables_with_context.json  # Tabelle con didascalie e paragrafi di contesto
-│   └── figures_with_context.json # Figure con didascalie e menzioni nel testo
-├── pubmed/                       # Corpus e dati estratti di PubMed Central (705 paper)
-│   ├── corpus.json               # Metadati e full-text HTML/XML dei paper PubMed
-│   ├── tables_with_context.json  # Oltre 1600 tabelle arricchite con contesto
-│   └── figures_with_context.json # Oltre 1100 figure arricchite con contesto
-├── app/                          # Core dell'applicazione
+Homework-5-new/
+├── pubmed/                       # Dataset PubMed Central (PMC)
+│   ├── corpus.json               # 705 paper completi
+│   ├── tables_with_context.json  # 1.674 tabelle con contesto
+│   └── figures_with_context.json # 1.179 figure con contesto
+├── arxiv/                        # Dataset arXiv (500+ paper con HTML reale)
+│   ├── corpus.json               # 505 paper verificati con HTML completo
+│   ├── tables_with_context.json  # 3.541 tabelle estratte
+│   └── figures_with_context.json # 2.404 figure estratte
+├── corpus.json -> pubmed/corpus.json                 # Symlink root retrocompatibile
+├── tables_with_context.json -> pubmed/...           # Symlink root retrocompatibile
+├── figures_with_context.json -> pubmed/...          # Symlink root retrocompatibile
+├── app/                          # Core applicativo
 │   ├── business/
-│   │   ├── corpus_builder/       # Acquisizione dati da API esterne
-│   │   │   ├── downloader.py     # Gestione concorrenza e rate limiting
-│   │   │   ├── models.py         # Modello dati unificato Paper
-│   │   │   └── source/           # Connettori sorgente
-│   │   │       ├── arxiv.py      # Client API arXiv
-│   │   │       ├── base.py       # Interfaccia astratta DocumentSource
-│   │   │       └── pubmed.py     # Client NCBI E-Utilities
-│   │   ├── extractor/            # Estrazione ed arricchimento contestuale
-│   │   │   ├── table_context_extractor.py  # Estrazione tabelle, caption e menzioni
-│   │   │   └── figure_context_extractor.py # Estrazione figure, immagini e contesti
-│   │   └── indexer/              # Gestione indici e caricamento Elasticsearch
-│   │       ├── elastic_indexer.py          # Indicizzazione documenti (papers_index)
-│   │       ├── index_advanced_tables.py    # Indicizzazione tabelle (tables_index)
-│   │       └── index_advanced_figures.py   # Indicizzazione figure (figures_index)
-│   ├── config/
-│   │   └── config.py             # Configurazione dell'applicazione e variabili d'ambiente
-│   ├── services/
-│   │   └── routes.py             # Controller FastAPI: ricerca, paper viewer e task API
-│   └── utils/                    # Funzioni di utilità
-│       ├── check_caption.py
-│       ├── clean_figure.py
-│       └── format_date.py
-├── experiments/                  # Valutazione sperimentale Information Retrieval
-│   ├── evaluation.py             # Script di benchmark (MAP, nDCG@10, MRR, P@K, latenze)
-│   └── evaluation_results.json   # Risultati esportati per query e riepilogo aggregato
-├── templates/                    # Template Jinja2 per la Web Application
-│   ├── index.html                # Interfaccia di ricerca con filtri e builder booleano
-│   ├── paper.html                # Visualizzatore documento con highlighting e deep linking
-│   └── results.html              # Rendering parziale dei risultati di ricerca
-├── test/                         # Script operativi per l'esecuzione della pipeline
-│   ├── pipeline_arxiv.py         # Download, estrazione e indicizzazione dataset arXiv
-│   └── pipeline_pubmed.py        # Indicizzazione e sincronizzazione dataset PubMed
-├── corpus.json                   # Dataset attivo di documenti caricato su Elasticsearch
-├── tables_with_context.json      # Dataset attivo di tabelle caricato su Elasticsearch
-├── figures_with_context.json     # Dataset attivo di figure caricato su Elasticsearch
-├── run.py                        # Entry point server Web (FastAPI / Uvicorn)
-├── requirements.txt              # Dipendenze Python del progetto
-├── RISULTATI.md                  # Relazione con tempi, statistiche e benchmark IR
-├── .env                          # Variabili d'ambiente (Elasticsearch host/auth, API key)
-└── .env_example                  # File template di configurazione di esempio
+│   │   ├── corpus_builder/       # Client di acquisizione API (arXiv e PubMed)
+│   │   ├── extractor/            # Estrazione tabelle, figure, caption e contesto
+│   │   └── indexer/              # Indicizzatori Elasticsearch dedicati (papers, tables, figures)
+│   ├── config/                   # Configurazione centralizzata (.env, query di gruppo)
+│   ├── services/routes.py        # Controller FastAPI (Web UI, Search, Task API multi-source)
+│   └── utils/                    # Parsing date, pulizia testo e gestione immagini
+├── docs/images/                  # Screenshot dell'interfaccia Web e della CLI
+├── experiments/                  # Valutazione sperimentale IR (MAP, nDCG@10, MRR, Precision@K)
+├── templates/                    # Template HTML Jinja2 (index.html, results.html, paper.html)
+├── scripts/                      # Script batch e utility di indicizzazione
+│   ├── index_all.py              # Script unificato per reindicizzare entrambi i corpus (10.008 entità)
+│   ├── pipeline_arxiv.py         # Pipeline arXiv batch con supporto --limit 500
+│   └── pipeline_pubmed.py        # Pipeline PubMed batch su pubmed/
+├── cli_search.py                 # Shell CLI di ricerca interattiva e scriptabile (Requisiti 3 e 8)
+├── RISULTATI.md                  # Relazione tecnica, benchmark e 10 query di esempio
+└── run.py                        # Entry point server Web Uvicorn
 ```
 
 ---
 
-## Requisiti di Sistema
+## Pipeline di Elaborazione e Scelte Metodologiche
 
-- **Python**: 3.14 o superiore 
-- **Elasticsearch**: 8.x (in esecuzione locale o remota)
+1. **Acquisizione arXiv Conforme alla Consegna**:
+   - Poiché i paper del solo Gruppo A in tutta la storia di arXiv contavano 396 paper totali (molti pre-2023 privi di HTML), la ricerca è stata estesa a tutti i gruppi ufficiali della traccia (Entity Resolution, Text-to-SQL, Speech Recognition, Text to Speech, Query Optimization).
+   - Verifica rigorosa di risposta HTTP 200 da `https://arxiv.org/html/<id>`.
+   - Download multi-thread parallelo con 6 worker e rispetto del rate-limiting API.
+2. **Estrazione Tabelle & Figure con Arricchimento**:
+   - Supporto a numeri arabi, romani (`Table I`, `IV`) e supplementari (`Table S1`).
+   - Risoluzione delle collisioni con identificativi univoci compositi.
+   - Ponderazione dei paragrafi di contesto tramite overlap di termini informativi al netto delle stopwords.
+   - Normalizzazione corretta dei link alle immagini sia per PMC (`pmc.ncbi.nlm.nih.gov`) sia per arXiv (`arxiv.org`).
+3. **Mapping Elasticsearch Ottimizzato**:
+   - `html_content` escluso dall'inverted index (`index: false`), risparmiando oltre 120 MB di RAM/disco.
+   - Aggiunto subfield `.keyword` su `authors` e `title` per ricerche esatte.
+   - Analyzer unificato a `english` su tutti i campi testuali per garantire coerenza nello stemming.
+   - `number_of_replicas: 0` per cluster single-node, garantendo cluster health **GREEN**.
 
 ---
 
-## Installazione e Configurazione
+## Requisiti e Installazione
 
-### 1. Setup Virtual Environment
+- **Python**: 3.14+ 
+- **Elasticsearch**: 8.x attivo su `https://localhost:9200`
 
 ```bash
-# Clone del repository
+# clone del repository
 git clone https://github.com/SilContemori/Homework-5-new.git
 cd Homework-5-new
 
-# Creazione ambiente virtuale
+# ambiente virtuale
 python3 -m venv .venv
+source .venv/bin/activate  # su Windows: .venv\Scripts\Activate.ps1
 
-# Attivazione su Linux / macOS / WSL
-source .venv/bin/activate
-
-# Attivazione su Windows PowerShell
-.venv\Scripts\Activate.ps1
-```
-
-### 2. Installazione Dipendenze
-
-```bash
-pip install --upgrade pip
+# installazione dipendenze
 pip install -r requirements.txt
 ```
 
-### 3. Configurazione File `.env`
-
-Crea o modifica il file `.env` nella root del progetto:
-
+Configura `.env` nella root del progetto:
 ```ini
-# Configurazione Elasticsearch
 HOST_ELASTIC=https://localhost:9200
 PASSWORD_ELASTIC=tua_password_elasticsearch
-
-# Chiave API NCBI (consigliata per PubMed per aumentare il rate limit a 10 req/s)
-NCBI_API_KEY=tua_chiave_ncbi_opzionale
-
-# Sorgente dati attiva ('pubmed' oppure 'arxiv')
-SOURCE=pubmed
-
-# Ritardo tra richieste consecutive (secondi)
-DELAY=2
-
-# Query di ricerca iniziale per il popolamento del corpus
-QUERY="cancer risk" AND "coffee consumption" AND free full text[filter] OR glyphosate AND cancer risk AND free full text[filter] OR ultra-processed foods AND cardiovascular risk AND free full text[filter]
+SOURCE=all
+NCBI_API_KEY=<tuo_api_key>
+DELAY=1.5
 ```
 
 ---
 
-## Avvio di Elasticsearch
+## Avvio Rapido (Server Web, CLI, Pipeline)
 
-Elasticsearch può essere avviato nativamente come servizio locale o tramite binario (senza necessità di Docker):
-
-- **Su Linux / WSL (Systemd)**:
-  ```bash
-  sudo systemctl start elasticsearch
-  ```
-
-- **Da binario locale**:
-  ```bash
-  ./bin/elasticsearch
-  ```
-
-Verifica che il servizio risponda correttamente:
-```bash
-curl -k https://localhost:9200 -u elastic:tua_password_elasticsearch
-```
-
----
-
-## Esecuzione della Pipeline e dell'Applicazione
-
-### Avvio della Web Application
-
+### 1. Avvio della Web Application
 ```bash
 python run.py
 ```
+Accedi all'interfaccia all'indirizzo [http://localhost:8080](http://localhost:8080) e alla documentazione interattiva OpenAPI su [http://localhost:8080/docs](http://localhost:8080/docs).
 
-L'applicazione sarà accessibile su:
-- **Interfaccia Web**: [http://localhost:8080](http://localhost:8080)
-- **Documentazione Swagger UI**: [http://localhost:8080/docs](http://localhost:8080/docs)
-
-### Esecuzione della Pipeline da Terminale (`test/`)
-
-Per popolare e sincronizzare rapidamente Elasticsearch con uno dei due dataset:
-
-- **Pipeline arXiv** (scarica, estrae tabelle/figure e indicizza su Elasticsearch):
-  ```bash
-  python test/pipeline_arxiv.py
-  ```
-
-- **Pipeline PubMed** (indicizza il corpus di 705 paper, tabelle e figure e sincronizza l'app):
-  ```bash
-  python test/pipeline_pubmed.py
-  ```
-
-### Esecuzione della Valutazione IR (`experiments/`)
-
-Per calcolare le metriche IR formali (MAP, nDCG@10, MRR, P@5, P@10 e latenze):
-
+### 2. Ricerca da Linea di Comando (CLI)
 ```bash
-python experiments/evaluation.py
+# modalità interattiva con menu a scelte
+python cli_search.py -i
+
+# ricerca rapida documenti su arXiv
+python cli_search.py -c papers -q "entity resolution" -s arxiv -n 3
+
+# ricerca tabelle con contesto
+python cli_search.py -c tables -q "precision recall f1" -n 2
+
+# ricerca booleana avanzata
+python cli_search.py -c papers -q "coffee AND cancer NOT smoking" -m boolean -n 3
 ```
-*(Oppure direttamente con parametro: `python experiments/evaluation.py -c arxiv` o `-c pubmed`).*
 
-### Esecuzione della Pipeline via API Swagger
-
-I processi modulari di scaricamento, estrazione e indicizzazione possono essere lanciati in background da `http://localhost:8080/docs`:
-
-1. `POST /api/tasks/corpus/build`: scarica gli articoli secondo la query configurata nel `.env` e genera `corpus.json`.
-2. `POST /api/tasks/index/papers`: indicizza i documenti completi in `papers_index`.
-3. `POST /api/tasks/extract/tables`: estrae le tabelle con contesto creando `tables_with_context.json`.
-4. `POST /api/tasks/index/tables`: indicizza le tabelle estratte in `tables_index`.
-5. `POST /api/tasks/extract/figures`: estrae le figure con contesto creando `figures_with_context.json`.
-6. `POST /api/tasks/index/figures`: indicizza le figure estratte in `figures_index`.
-7. `GET /api/tasks/{task_id}`: restituisce lo stato del task in tempo reale (`pending`, `running`, `completed`, `failed`).
-8. `GET /api/tasks/status`: verifica l'esistenza sul filesystem dei file generati dalla pipeline.
+### 3. Esecuzione della Reindicizzazione Unificata
+Per sincronizzare o ricostruire tutti gli indici di Elasticsearch con un singolo comando:
+```bash
+python scripts/index_all.py
+# oppure direttamente tramite la CLI di ricerca:
+python cli_search.py --index-all
+```
 
 ---
 
-## Guida alla Ricerca
+## Guida alla Ricerca (Web & CLI)
 
-1. **Ricerca Semplice**:
-   Inserisci i termini nella barra superiore per un `multi_match` fuzzy sui campi principali dell'entità scelta.
+L'interfaccia unificata supporta tutte le modalità previste dal **Requisito 3** della traccia:
 
-2. **Costruttore Booleano**:
-   - **Logica**: `WHERE` (prima condizione), `AND` (intersezione), `OR` (unione), `NOT` (esclusione).
-   - **Campi**:
-     - *Papers*: `tutti i campi`, `title`, `abstract`, `authors`, `full_text`, `published`, `paper_id`.
-     - *Tabelle*: `tutti i campi`, `caption`, `body`, `mentions`, `context_paragraphs`, `table_number`, `paper_title`.
-     - *Figure*: `tutti i campi`, `caption`, `mentions`, `context_paragraphs`, `figure_number`, `paper_title`.
-   - **Operatori**: `match` (fuzzy con autocorrezione), `phrase` (sequenza esatta), `term` (valore esatto).
+- **Filtro Sorgente**: seleziona `Tutti i Corpus`, `Solo arXiv` o `Solo PubMed / PMC`.
+- **Ricerca Full-Text**: impostando il campo su `full_text` (o lasciando `Campo...`), il motore esegue un `multi_match` ponderato (`title^3`, `abstract^2`, `full_text`, `authors`).
+- **Ricerca per Singolo Campo**: permette di vincolare la ricerca a `title`, `abstract`, `authors`, `published`, `paper_id`.
+- **Clausole Booleane**: consente di aggiungere condizioni dinamiche con `WHERE`, `AND`, `OR`, `NOT`.
+- **Operatori di Confronto**: `match` (fuzzy standard), `phrase` (sequenza esatta), `term` (valore esatto su keyword).
 
 ---
 
-## Valutazione Sperimentale e Risultati
+## Riferimento API (FastAPI)
 
-L'efficacia del motore di ricerca è stata validata formalmente su un benchmark di **20 documenti bilanciati** (15% arXiv e 85% PubMed/PMC), valutando tempi di elaborazione, ground truth e metriche di Information Retrieval:
+La documentazione interattiva è accessibile a server avviato su **`http://localhost:8080/docs`** (Swagger UI).
 
-- **Macro Precision**: **0.982**
-- **Macro Recall**: **0.989**
-- **Macro F1-Score**: **0.984**
-- **Media Accuracy**: **0.989**
+### 1. Ricerca & Web UI
+- `GET /` — Home page con form di ricerca.
+- `GET /search` — Esegue la ricerca su paper, tabelle o figure (filtri per campo e operatori booleani).
+- `GET /paper/{paper_id}` — Mostra l'HTML del paper ed evidenzia elementi cercati (`?table=...`, `?figure=...`, `?query=...`).
 
-Per l'analisi completa dei tempi di estrazione, statistiche del corpus, ground truth e dettaglio per singola query:
-📄 **[Consulta RISULTATI.md](RISULTATI.md)**
+### 2. Pipeline & Background Tasks
+Tutti i task accettano il parametro opzionale `source` (`"all"`, `"arxiv"`, `"pubmed"`):
+- `POST /api/tasks/corpus/build` — Scarica i paper in HTML da arXiv o PubMed.
+- `POST /api/tasks/extract/tables` — Estrae le tabelle con contesto e menzioni.
+- `POST /api/tasks/extract/figures` — Estrae le figure con didascalie e contesto.
+- `POST /api/tasks/index/papers` — Indicizza i paper su Elasticsearch.
+- `POST /api/tasks/index/tables` — Indicizza le tabelle su Elasticsearch.
+- `POST /api/tasks/index/figures` — Indicizza le figure su Elasticsearch.
+- `POST /api/tasks/index/all` — Indicizzazione unificata completa di entrambi i corpus (10.008 entità).
+- `GET /api/tasks/status` — Verifica la presenza dei file JSON su disco.
+- `GET /api/tasks/{task_id}` — Controlla lo stato di avanzamento di un task in background.
+
+### 3. Redirect Link Esterni (PMC e arXiv)
+Nei paper HTML scaricati sono presenti link relativi (es. `/articles/...`, `/pdf/...`). Questi endpoint evitano errori 404 e reindirizzano direttamente ai portali ufficiali di PubMed Central e arXiv.
 
 ---
 
-## Riferimento API
+## Valutazione Sperimentale e Benchmark IR
 
-| Metodo | Endpoint | Descrizione |
-|---|---|---|
-| `GET` | `/` | Home page con interfaccia di ricerca e filtri |
-| `GET` | `/search` | Endpoint di ricerca unificato (papers, tables, figures) |
-| `GET` | `/paper/{paper_id}` | Visualizzatore del documento con supporto highlighting e deep linking |
-| `POST` | `/api/tasks/corpus/build` | Avvia il download in background degli articoli |
-| `POST` | `/api/tasks/index/papers` | Avvia l'indicizzazione dei paper su Elasticsearch |
-| `POST` | `/api/tasks/extract/tables` | Estrae le tabelle con contesto creando `tables_with_context.json` |
-| `POST` | `/api/tasks/index/tables` | Indicizza le tabelle estratte in `tables_index` |
-| `POST` | `/api/tasks/extract/figures` | Estrae le figure con contesto creando `figures_with_context.json` |
-| `POST` | `/api/tasks/index/figures` | Indicizza le figure estratte in `figures_index` |
-| `GET` | `/api/tasks/{task_id}` | Restituisce lo stato del task asincrono in tempo reale |
-| `GET` | `/api/tasks/status` | Verifica l'esistenza dei file generati dalla pipeline |
+Il sistema è stato valutato formalmente su un dataset bilanciato con metriche di Information Retrieval rigorose:
+
+- **Cluster Health**: **GREEN**
+- **Documenti Totali**: **1.210** (705 PubMed + 505 arXiv)
+- **Tabelle Totali**: **5.241** (1.700 PubMed + 3.541 arXiv)
+- **Figure Totali**: **3.499** (1.095 PubMed + 2.404 arXiv)
+- **Totale Entità Indicizzate**: **9.950**
+
+### Sintesi delle Prestazioni
+
+| Categoria | Modalità | MAP | nDCG@10 | MRR | Precision@5 | Latenza Media |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Papers** | Full-Text | 0.6225 | 0.7116 | 0.9333 | 0.6800 | 289.7 ms |
+| **Papers** | Booleana | 0.6645 | 0.7328 | 0.9333 | 0.7000 | 240.9 ms |
+| **Tables** | Booleana | 0.2577 | 0.5494 | 0.7305 | 0.5200 | 15.5 ms |
+| **Figures** | Booleana | 0.3984 | 0.6975 | 0.7917 | 0.5600 | 10.9 ms |
+
+Per la relazione tecnica integrale, i tempi di indicizzazione dettagliati e l'esecuzione analitica delle 10 query di esempio (arXiv vs PubMed):
+**[Consulta il documento RISULTATI.md](RISULTATI.md)**

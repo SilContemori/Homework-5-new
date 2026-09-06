@@ -7,7 +7,7 @@ DOTENV = os.path.join(SRC_DIR, '.env')
 
 class ConfigSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=DOTENV, env_ignore_empty=True, extra="ignore")
-    HOST_ELASTIC: str
+    HOST_ELASTIC: str = "https://localhost:9200"
     PASSWORD_ELASTIC: str = ""
     NCBI_API_KEY: str = ""
     HEADERS: dict[str, str] = {
@@ -15,23 +15,33 @@ class ConfigSettings(BaseSettings):
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
     }
-    DELAY: int = 3
+    DELAY: float = 1.5
 
-    # sorgente attiva di default: 'arxiv' oppure 'pubmed' (sovrascrivibile da .env)
-    SOURCE: str = "arxiv"
+    # sorgente attiva di default: 'all', 'arxiv' o 'pubmed'
+    SOURCE: str = "all"
 
-    #Query arXiv estesa
-    #QUERY: str = 'all:"entity resolution" OR all:"entity matching" OR all:"record linkage" OR all:"data deduplication"'
+    # query arxiv gruppo a
+    QUERY_ARXIV: str = 'ti:"entity resolution" OR abs:"entity resolution" OR ti:"entity matching" OR abs:"entity matching"'
 
-    # Query arXiv alternativa (singola):
-    # QUERY: str = 'ti:"entity resolution"'
+    # query pubmed
+    QUERY_PUBMED: str = (
+        '(("cancer risk" AND "coffee consumption") OR '
+        '("glyphosate" AND "cancer risk") OR '
+        '("air pollution" AND "cognitive decline") OR '
+        '("ultra-processed foods" AND "cardiovascular risk")) '
+        'AND (free full text[filter] OR open access[filter])'
+    )
 
-    # Query PubMed (Cancer risk, coffee, glyphosate, ultra-processed foods: ~705 articoli):
-    QUERY: str = (
-         '"cancer risk" AND "coffee consumption" AND free full text[filter] '
-         'OR glyphosate AND cancer risk AND free full text[filter] '
-         'OR ultra-processed foods AND cardiovascular risk AND free full text[filter]'
-     )
+    QUERY: str = ""
+
+    def model_post_init(self, __context):
+        if not self.QUERY:
+            if self.SOURCE.lower() == "pubmed":
+                self.QUERY = self.QUERY_PUBMED
+            elif self.SOURCE.lower() == "arxiv":
+                self.QUERY = self.QUERY_ARXIV
+            else:
+                self.QUERY = self.QUERY_PUBMED
 
 
 config = ConfigSettings()

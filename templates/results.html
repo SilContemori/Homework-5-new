@@ -134,6 +134,14 @@
             margin: 15px 0;
             display: block;
         }
+        .query-highlight {
+            background-color: #ffcccc;
+            color: #9b2c2c;
+            border: 1px solid #e53e3e;
+            border-radius: 3px;
+            padding: 1px 4px;
+            font-weight: 600;
+        }
         .relevance-score {
             font-size: 0.8rem;
             color: #a0aec0;
@@ -185,6 +193,11 @@
         {% if hits %}
             {% for hit in hits %}
                 <div class="result-card">
+                    {% if hit._source.source %}
+                    <div class="mb-2">
+                        <span class="badge bg-secondary" style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;">Corpus: {{ hit._source.source }}</span>
+                    </div>
+                    {% endif %}
 
                     {% if category == 'papers' %}
                         <div class="paper-card">
@@ -213,13 +226,13 @@
 
                     {% elif category == 'tables' %}
                         <div class="paper-title-section">
-                            <strong style="color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 3px;">Paper di provenienza</strong>
+                            <strong style="color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 3px;">Source Paper</strong>
                             <span class="title-text" style="color: #1a202c; font-weight: 600; font-size: 1rem;">{{ hit._source.paper_title }}</span>
                         </div>
 
                         {% if 'body' in query|lower and 'caption' not in query|lower %}
                             <div class="caption-section" style="background: #fffaf0; border-left: 3px solid #dd6b20;">
-                                <strong style="color: #7c2d12; font-size: 0.85rem; display: block; margin-bottom: 6px;">Corpo Tabella {{ hit._source.table_number or '' }}</strong>
+                                <strong style="color: #7c2d12; font-size: 0.85rem; display: block; margin-bottom: 6px;">Table Content {{ hit._source.table_number or '' }}</strong>
                                 <div class="caption-text" style="color: #4a5568; line-height: 1.5; max-height: 90px; overflow: hidden;">
                                     {{ hit._source.body[:300] }}...
                                 </div>
@@ -234,7 +247,7 @@
                             </div>
                             {% if hit._source.body %}
                             <details class="mb-3">
-                                <summary class="text-muted small" style="cursor: pointer; user-select: none;">Mostra anteprima dati tabella</summary>
+                                <summary class="text-muted small" style="cursor: pointer; user-select: none;">Show table data preview</summary>
                                 <div class="p-2 mt-1 bg-light border rounded small text-muted" style="max-height: 80px; overflow: hidden; line-height: 1.4;">
                                     {{ hit._source.body[:280] }}...
                                 </div>
@@ -252,15 +265,15 @@
 
                     {% elif category == 'figures' or category == 'images' %}
                         <div class="paper-title-section">
-                            <strong>Paper</strong>
-                            <span class="title-text">{{ hit._source.paper_title }}</span>
+                            <strong style="color: #718096; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 3px;">Source Paper</strong>
+                            <span class="title-text" style="color: #1a202c; font-weight: 600; font-size: 1rem;">{{ hit._source.paper_title }}</span>
                         </div>
 
                         <div class="caption-section">
                             <strong class="caption-text">{{ hit._source.caption or ('Figure ' ~ hit._source.figure_number) }}</strong>
                         </div>
 
-                        <img src="{{ hit._source.url }}"
+                        <img src="{{ hit._source.url }}" onerror="this.style.display='none'"
                              class="figure-image"
                              alt="Figure">
 
@@ -284,5 +297,147 @@
 
     </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const rawQuery = {{ query | tojson }};
+    if (!rawQuery) return;
+
+    // Parsing delle clausole strutturate con campo associato
+    function parseFieldClauses(rawText) {
+        const clauseRegex = /\b(WHERE|AND|OR|NOT)\s+([^()]+?)\s*\((match|phrase|term)\)\s*'([^']*)'/gi;
+        const clauses = [];
+        let match;
+        while ((match = clauseRegex.exec(rawText)) !== null) {
+            const logic = match[1].toUpperCase();
+            if (logic === 'NOT') continue; // non evidenziare parole escluse
+            const fieldRaw = match[2].trim().toLowerCase();
+            let field = 'all';
+            if (fieldRaw.includes('abstract')) field = 'abstract';
+            else if (fieldRaw.includes('title')) field = 'title';
+            else if (fieldRaw.includes('author')) field = 'authors';
+            else if (fieldRaw.includes('caption')) field = 'caption';
+            else if (fieldRaw.includes('body')) field = 'body';
+
+            const val = match[4].trim();
+            if (!val) continue;
+
+            const terms = [val];
+            val.split(/\s+/).forEach(w => {
+                if (w.length > 1 && !terms.includes(w)) terms.push(w);
+            });
+            clauses.push({ field, terms });
+        }
+        return clauses;
+    }
+
+    function createPattern(terms) {
+        if (!terms || terms.length === 0) return null;
+        const sorted = [...terms].sort((a, b) => b.length - a.length);
+        const patterns = sorted.map(t => {
+            const escaped = t.split(/\s+/).map(w => {
+                const esc = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                if (esc.length >= 4 && /^[a-zA-Z]+$/.test(esc)) {
+                    const stem = esc.replace(/(?:al|ally|ic|ical|ing|ed|es|s)$/i, '');
+                    const base = stem.length >= 3 ? stem : esc;
+                    return `${base}(?:al|ally|ic|ical|ing|ed|es|s|d)?`;
+                }
+                return esc;
+            }).join('\\s+');
+            const prefix = /^\w/.test(t) ? '\\b' : '';
+            const suffix = /\w$/.test(t) ? '\\b' : '';
+            return `${prefix}${escaped}${suffix}`;
+        });
+        const patternStr = patterns.join('|');
+        return {
+            patternStr,
+            matchRegex: new RegExp(`(${patternStr})`, 'gi'),
+            testRegex: new RegExp(`^(${patternStr})$`, 'i')
+        };
+    }
+
+    function highlightElement(el, matcher) {
+        if (!el || !matcher) return;
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        let node;
+        const nodesToReplace = [];
+        while (node = walker.nextNode()) {
+            if (!node.parentElement || node.parentElement.classList.contains('query-highlight')) continue;
+            if (['SCRIPT', 'STYLE', 'BUTTON', 'A'].includes(node.parentElement.tagName)) continue;
+            if (new RegExp(matcher.patternStr, 'i').test(node.textContent)) {
+                nodesToReplace.push(node);
+            }
+        }
+        nodesToReplace.forEach(n => {
+            const span = document.createElement('span');
+            const parts = n.textContent.split(matcher.matchRegex);
+            parts.forEach(part => {
+                if (!part) return;
+                if (matcher.testRegex.test(part)) {
+                    const mark = document.createElement('span');
+                    mark.className = 'query-highlight';
+                    mark.textContent = part;
+                    span.appendChild(mark);
+                } else {
+                    span.appendChild(document.createTextNode(part));
+                }
+            });
+            if (n.parentNode) {
+                n.parentNode.replaceChild(span, n);
+            }
+        });
+    }
+
+    const fieldClauses = parseFieldClauses(rawQuery);
+
+    document.querySelectorAll('.result-card').forEach(card => {
+        if (fieldClauses.length > 0) {
+            fieldClauses.forEach(clause => {
+                const matcher = createPattern(clause.terms);
+                if (!matcher) return;
+
+                if (clause.field === 'title' || clause.field === 'paper_title') {
+                    const titleEl = card.querySelector('h4, .title-text, .paper-title-section');
+                    if (titleEl) highlightElement(titleEl, matcher);
+                } else if (clause.field === 'abstract') {
+                    const ps = card.querySelectorAll('p');
+                    ps.forEach(p => {
+                        if (!p.querySelector('strong') || !p.textContent.includes('Authors:')) {
+                            highlightElement(p, matcher);
+                        }
+                    });
+                } else if (clause.field === 'authors') {
+                    const ps = card.querySelectorAll('p');
+                    ps.forEach(p => {
+                        if (p.textContent.includes('Authors:')) {
+                            highlightElement(p, matcher);
+                        }
+                    });
+                } else if (clause.field === 'caption') {
+                    const capEl = card.querySelector('.caption-text, .caption-section');
+                    if (capEl) highlightElement(capEl, matcher);
+                } else if (clause.field === 'body') {
+                    const bodyEl = card.querySelector('.table-responsive, table, .table-preview, .d-panel');
+                    if (bodyEl) highlightElement(bodyEl, matcher);
+                } else if (clause.field === 'mentions' || clause.field === 'context_paragraphs') {
+                    const ctxEl = card.querySelector('.context-section, .mention-section, .d-panel');
+                    if (ctxEl) highlightElement(ctxEl, matcher);
+                } else {
+                    // Campo 'all' o full_text: evidenzia su tutta la card
+                    highlightElement(card, matcher);
+                }
+            });
+        } else {
+            // Ricerca semplice su tutto
+            const clean = rawQuery.replace(/\b(AND|OR|NOT|WHERE)\b/gi, ' ')
+                                 .replace(/\[(ARXIV|PUBMED)\]/gi, ' ')
+                                 .replace(/[()'"\[\]]/g, ' ')
+                                 .trim();
+            const generalTerms = clean.split(/\s+/).filter(t => t.length > 1);
+            const matcher = createPattern(generalTerms);
+            if (matcher) highlightElement(card, matcher);
+        }
+    });
+});
+</script>
 </body>
 </html>

@@ -1,3 +1,4 @@
+import os
 import json
 from elasticsearch import Elasticsearch, helpers
 from loguru import logger
@@ -30,59 +31,63 @@ class TablesIndexer:
                 return
 
         mapping = {
+            "settings": {
+                "number_of_shards": 1,
+                "number_of_replicas": 0
+            },
             "mappings": {
                 "properties": {
                     "paper_id": {"type": "keyword"},
                     "pmc_id": {"type": "keyword"},
                     "pmid": {"type": "keyword"},
-                    "paper_title": {"type": "text", "analyzer": "standard"},
+                    "source": {"type": "keyword"},
+                    "paper_title": {"type": "text", "analyzer": "english"},
                     "table_id": {"type": "keyword"},
                     "table_number": {"type": "integer"},
                     "element_id": {"type": "keyword"},
-                    "caption": {"type": "text", "analyzer": "standard"},
-                    "body": {"type": "text", "analyzer": "standard"},
-                    "mentions": {"type": "text", "analyzer": "standard"},
-                    "context_paragraphs": {"type": "text", "analyzer": "standard"}
+                    "caption": {"type": "text", "analyzer": "english"},
+                    "body": {"type": "text", "analyzer": "english"},
+                    "mentions": {"type": "text", "analyzer": "english"},
+                    "context_paragraphs": {"type": "text", "analyzer": "english"}
                 }
             }
         }
 
         self.es.indices.create(index=self.index_name, body=mapping)
-        logger.success(f"Indice '{self.index_name}' creato con successo.")
+        logger.success(f"Indice '{self.index_name}' creato con mapping ottimizzato.")
 
-    def index_from_json(self, json_file):
-        """
-        Indicizza le tabelle da un file JSON.
-        Usa _id composito per evitare collisioni.
-        """
-
+    def index_from_json(self, json_file, default_source=None):
         with open(json_file, encoding="utf-8") as f:
             tables = json.load(f)
 
         if not tables:
             logger.warning("Nessuna tabella trovata nel file JSON.")
-            return
+            return 0
 
         actions = []
         for idx, table in enumerate(tables):
             paper_ref = table.get("pmc_id") or table.get("paper_id") or "doc"
             elem_id = table.get("element_id") or ""
             table_num = table.get("table_number", idx + 1)
-            t_id = f"{paper_ref}_table_{table_num}"
+
+            t_id = f"{paper_ref}_table_{table_num}_{idx}"
             if elem_id:
                 t_id += f"_{elem_id}"
-            elif table.get("table_index") is not None:
-                t_id += f"_{table.get('table_index')}"
+
+            source = table.get("source") or default_source
+            if not source:
+                source = "pubmed" if (table.get("pmc_id") or table.get("pmid")) else "arxiv"
 
             actions.append({
                 "_index": self.index_name,
                 "_id": t_id,
                 "_source": {
-                    "paper_id": table.get("paper_id", ""),
-                    "pmc_id": table.get("pmc_id", ""),
-                    "pmid": table.get("pmid", ""),
+                    "paper_id": str(table.get("paper_id", "")),
+                    "pmc_id": str(table.get("pmc_id", "")),
+                    "pmid": str(table.get("pmid", "")),
+                    "source": source,
                     "paper_title": table.get("paper_title", ""),
-                    "table_id": table.get("table_id") or f"table_{table_num}",
+                    "table_id": table.get("table_id") or f"table_{table_num}_{idx}",
                     "table_number": table_num,
                     "element_id": elem_id,
                     "caption": table.get("caption", ""),
@@ -93,11 +98,11 @@ class TablesIndexer:
             })
 
         success, _ = helpers.bulk(self.es, actions)
-        logger.success(f"Indicizzate correttamente {success} tabelle.")
+        logger.success(f"Indicizzate correttamente {success} tabelle in '{self.index_name}'.")
+        return success
 
 
 if __name__ == "__main__":
-    import os
     indexer = TablesIndexer()
     indexer.create_index(reset=True)
     json_path = os.path.join(
@@ -105,4 +110,5 @@ if __name__ == "__main__":
         "..", "..", "..",
         "tables_with_context.json"
     )
-    indexer.index_from_json(json_path)
+    if os.path.exists(json_path):
+        indexer.index_from_json(json_path)

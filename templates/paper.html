@@ -238,18 +238,51 @@
             font-size: 1.05rem;
         }
 
+        .paper-content .ltx_transformed_outer {
+            height: auto !important;
+            width: auto !important;
+            max-width: 100% !important;
+            vertical-align: top !important;
+            overflow-x: auto !important;
+            display: block !important;
+            clear: both !important;
+        }
+
+        .paper-content .ltx_transformed_inner {
+            display: block !important;
+            max-width: 100% !important;
+            transform: none !important;
+        }
+
+        .paper-content figure,
         .paper-content .ltx_table,
         .paper-content .ltx_figure {
-            margin: 25px auto;
+            float: none !important;
+            clear: both !important;
+            position: relative !important;
+            display: block !important;
+            margin: 30px auto !important;
+            max-width: 100% !important;
+            height: auto !important;
             text-align: center;
         }
 
+        .paper-content figcaption,
         .paper-content .ltx_caption {
+            display: block !important;
+            clear: both !important;
             font-size: 0.95rem;
             color: #4a5568;
-            margin-top: 8px;
-            margin-bottom: 12px;
+            margin-top: 14px !important;
+            margin-bottom: 20px !important;
+            position: relative !important;
+            line-height: 1.6 !important;
+            width: 100% !important;
             text-align: left;
+        }
+
+        .paper-content table.ltx_tabular {
+            margin: 10px auto !important;
         }
 
         .paper-content .ltx_ERROR {
@@ -308,7 +341,7 @@
         <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
             <a id="smart-back-btn" href="/" class="back-btn mb-0">← Back to search</a>
             <div class="d-flex gap-2 align-items-center">
-                {% if 'arxiv' in (paper.html_url or '') or 'arxiv' in (paper.pdf_url or '') or (paper.paper_id and not paper.pmc_id) %}
+                {% if paper.source == 'arxiv' or 'arxiv' in (paper.html_url or '') or 'arxiv' in (paper.pdf_url or '') %}
                     <span class="badge bg-secondary">arXiv: {{ paper.paper_id }}</span>
                     <a href="https://arxiv.org/abs/{{ paper.paper_id }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-danger btn-sm">
                         arXiv Abstract ↗
@@ -316,9 +349,9 @@
                     <a href="/pdf/{{ paper.paper_id }}" target="_blank" rel="noopener noreferrer" class="btn btn-danger btn-sm">
                         PDF arXiv ↗
                     </a>
-                {% elif paper.html_url %}
+                {% else %}
                     {% if paper.pmc_id %}<span class="badge bg-secondary">{{ paper.pmc_id }}</span>{% endif %}
-                    <a href="{{ paper.html_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-danger btn-sm">
+                    <a href="{{ paper.html_url or 'https://pubmed.ncbi.nlm.nih.gov/' ~ paper.paper_id ~ '/' }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-danger btn-sm">
                         PubMed ↗
                     </a>
                     {% if paper.doi %}
@@ -362,7 +395,7 @@
             </div>
 
             <div class="p-3 mb-3 bg-light border rounded d-flex flex-wrap justify-content-between align-items-center gap-2">
-                {% if 'arxiv' in (paper.html_url or '') or 'arxiv' in (paper.pdf_url or '') or (paper.paper_id and not paper.pmc_id) %}
+                {% if paper.source == 'arxiv' or 'arxiv' in (paper.html_url or '') or 'arxiv' in (paper.pdf_url or '') %}
                     <div>
                         <span class="badge bg-secondary me-2">arXiv Document</span>
                         <span class="small text-muted">Questo documento proviene dall'archivio arXiv. Puoi consultare l'abstract e il PDF originale online.</span>
@@ -600,6 +633,27 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+        // Auto-linkify email addresses across paper
+    const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
+    function linkifyEmails(node) {
+        if (node.nodeType === Node.TEXT_NODE) {
+            if (node.textContent && emailRegex.test(node.textContent)) {
+                emailRegex.lastIndex = 0;
+                const span = document.createElement('span');
+                span.innerHTML = node.textContent.replace(emailRegex, function(email) {
+                    return `<a href="mailto:${email}" class="text-danger text-decoration-none fw-semibold">${email}</a>`;
+                });
+                node.replaceWith(span);
+            }
+        } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName !== 'A' && node.tagName !== 'SCRIPT' && node.tagName !== 'STYLE') {
+            Array.from(node.childNodes).forEach(linkifyEmails);
+        }
+    }
+    const paperContainer = document.querySelector('.paper-container');
+    if (paperContainer) {
+        linkifyEmails(paperContainer);
+    }
+
     const backBtn = document.getElementById('smart-back-btn');
     if (backBtn && query) {
         backBtn.onclick = e => {
@@ -812,12 +866,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function getAbstractElement(root) {
         if (!root) return null;
-        let el = root.querySelector('section.abstract, [class*="abstract" i], [id*="abstract" i], [id*="Abs" i]');
+        let el = root.querySelector('section.abstract, .abstract, .abstract-text, .ltx_abstract, [class*="abstract" i], [id*="abstract" i], [id*="Abs" i]');
         if (!el) {
-            const headings = root.querySelectorAll('h1, h2, h3, h4, h5, h6, .obj_head');
+            const headings = root.querySelectorAll('h1, h2, h3, h4, h5, h6, .obj_head, .ltx_title_abstract');
             for (const h of headings) {
                 if (/^\s*abstract\s*$/i.test((h.textContent || '').trim())) {
-                    el = h.closest('section, div') || h.parentElement;
+                    el = h.closest('section, div, .ltx_abstract') || h.parentElement;
                     break;
                 }
             }
@@ -863,7 +917,16 @@ document.addEventListener('DOMContentLoaded', function () {
         cleanTerms.sort((a, b) => b.length - a.length);
 
         const patterns = cleanTerms.map(t => {
-            const escaped = t.split(/\s+/).map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('\\s+');
+            const escaped = t.split(/\s+/).map(w => {
+                const esc = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                // Se la parola ha almeno 4 lettere ed è puramente alfabetica, permetti suffissi flessivi (ed, ing, s, es, d)
+                if (esc.length >= 4 && /^[a-zA-Z]+$/.test(esc)) {
+                    const stem = esc.replace(/(?:al|ally|ic|ical|ing|ed|es|s)$/i, '');
+                    const base = stem.length >= 3 ? stem : esc;
+                    return `${base}(?:al|ally|ic|ical|ing|ed|es|s|d)?`;
+                }
+                return esc;
+            }).join('\\s+');
             const prefix = /^\w/.test(t) ? '\\b' : '';
             const suffix = /\w$/.test(t) ? '\\b' : '';
             return `${prefix}${escaped}${suffix}`;
@@ -911,8 +974,19 @@ document.addEventListener('DOMContentLoaded', function () {
         return firstMatch;
     }
 
-    const queryData = parseQueryInfo(query);
+const queryData = parseQueryInfo(query);
     const positiveClauses = queryData.clauses.filter(c => c.logic !== 'NOT');
+
+    // Clean indicator banner display
+    const allSearchTerms = [];
+    positiveClauses.forEach(c => c.terms.forEach(t => { if (!allSearchTerms.includes(t)) allSearchTerms.push(t); }));
+    if (allSearchTerms.length === 0 && queryData.generalTerms) {
+        queryData.generalTerms.forEach(t => { if (!allSearchTerms.includes(t)) allSearchTerms.push(t); });
+    }
+    const bannerIndText = document.getElementById('indicator-text');
+    if (bannerIndText && allSearchTerms.length > 0) {
+        bannerIndText.textContent = `Highlighting: "${allSearchTerms.join(', ')}"`;
+    }
     let primaryScrollTarget = null;
 
     if (tableNumber || category === 'tables' || (elementId && (elementId.startsWith('T') || elementId.startsWith('t') || elementId.includes('.T')))) {
@@ -978,71 +1052,63 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     } else if (content) {
         if (positiveClauses.length > 0) {
-            const hasAbstractOnly = positiveClauses.length === 1 && positiveClauses[0].field === 'abstract';
-            const hasTitleOnly = positiveClauses.length === 1 && (positiveClauses[0].field === 'title' || positiveClauses[0].field === 'paper_title');
-
-            if (hasAbstractOnly) {
-                const abstractEl = getAbstractElement(content);
-                if (abstractEl) {
-                    const match = highlightTerms(positiveClauses[0].terms, abstractEl);
-                    primaryScrollTarget = match || abstractEl;
-                    const indText = document.getElementById('indicator-text');
-                    if (indText) indText.textContent = `Highlighting in Abstract: "${positiveClauses[0].terms.join(', ')}"`;
-                } else {
-                    primaryScrollTarget = highlightTerms(positiveClauses[0].terms, content);
-                }
-            } else if (hasTitleOnly) {
-                const titleEl = content.querySelector('h1, .content-title, .article-title, .fm-title, .title, .ltx_title_document, .ltx_title') || document.getElementById('fallback-paper-title');
-                if (titleEl) {
-                    const match = highlightTerms(positiveClauses[0].terms, titleEl);
-                    primaryScrollTarget = match || titleEl;
-                    const indText = document.getElementById('indicator-text');
-                    if (indText) indText.textContent = `Highlighting in Title: "${positiveClauses[0].terms.join(', ')}"`;
-                } else {
-                    primaryScrollTarget = highlightTerms(positiveClauses[0].terms, content);
-                }
-            } else {
-                positiveClauses.forEach(clause => {
-                    if (clause.field === 'abstract') {
-                        const abEl = getAbstractElement(content);
-                        if (abEl) {
-                            const m = highlightTerms(clause.terms, abEl);
-                            if (!primaryScrollTarget && m) primaryScrollTarget = m;
-                        } else {
-                            const m = highlightTerms(clause.terms, content);
-                            if (!primaryScrollTarget && m) primaryScrollTarget = m;
-                        }
-                    } else if (clause.field === 'authors') {
-                        const authorEls = getAuthorContainers(content);
-                        let matched = false;
-                        authorEls.forEach(el => {
-                            const m = highlightTerms(clause.terms, el);
-                            if (m) {
-                                matched = true;
-                                if (!primaryScrollTarget) primaryScrollTarget = m;
-                            }
-                        });
-                        if (!matched) {
-                            const fallbackTitle = document.getElementById('fallback-paper-authors');
-                            if (fallbackTitle) {
-                                const m = highlightTerms(clause.terms, fallbackTitle);
-                                if (!primaryScrollTarget && m) primaryScrollTarget = m;
-                            }
-                        }
-                    } else if (clause.field === 'title' || clause.field === 'paper_title') {
-                        const tEl = content.querySelector('h1, .content-title, .article-title, .fm-title, .title, .ltx_title_document, .ltx_title') || document.getElementById('fallback-paper-title');
-                        if (tEl) {
-                            const m = highlightTerms(clause.terms, tEl);
-                            if (!primaryScrollTarget && m) primaryScrollTarget = m;
-                        }
-                    } else if (clause.field === 'meta_field') {
+            positiveClauses.forEach(clause => {
+                if (clause.field === 'abstract') {
+                    const abEl = getAbstractElement(content);
+                    if (abEl) {
+                        const m = highlightTerms(clause.terms, abEl);
+                        if (!primaryScrollTarget && m) primaryScrollTarget = m;
                     } else {
-                        const m = highlightTerms(clause.terms, content);
+                        const paras = content.querySelectorAll('p.ltx_p, p, .abstract-text');
+                        for (const p of paras) {
+                            const m = highlightTerms(clause.terms, p);
+                            if (!primaryScrollTarget && m) primaryScrollTarget = m;
+                        }
+                    }
+                } else if (clause.field === 'authors') {
+                    const authorEls = getAuthorContainers(content);
+                    let matched = false;
+                    authorEls.forEach(el => {
+                        const m = highlightTerms(clause.terms, el);
+                        if (m) {
+                            matched = true;
+                            if (!primaryScrollTarget) primaryScrollTarget = m;
+                        }
+                    });
+                    if (!matched) {
+                        const fallbackAuthors = document.getElementById('fallback-paper-authors');
+                        if (fallbackAuthors) {
+                            const m = highlightTerms(clause.terms, fallbackAuthors);
+                            if (!primaryScrollTarget && m) primaryScrollTarget = m;
+                        }
+                    }
+                } else if (clause.field === 'title' || clause.field === 'paper_title') {
+                    const tEl = content.querySelector('h1, .content-title, .article-title, .fm-title, .title, .ltx_title_document, .ltx_title') || document.getElementById('fallback-paper-title');
+                    if (tEl) {
+                        const m = highlightTerms(clause.terms, tEl);
                         if (!primaryScrollTarget && m) primaryScrollTarget = m;
                     }
-                });
-            }
+                } else if (clause.field === 'caption') {
+                    const capEls = content.querySelectorAll('caption, figcaption, [class*="caption" i], .obj_head');
+                    capEls.forEach(el => {
+                        const m = highlightTerms(clause.terms, el);
+                        if (!primaryScrollTarget && m) primaryScrollTarget = m;
+                    });
+                } else if (clause.field === 'body') {
+                    const bodyEls = content.querySelectorAll('table, tbody, tr, td, th');
+                    bodyEls.forEach(el => {
+                        const m = highlightTerms(clause.terms, el);
+                        if (!primaryScrollTarget && m) primaryScrollTarget = m;
+                    });
+                } else if (clause.field === 'meta_field') {
+                } else {
+                    const m = highlightTerms(clause.terms, content);
+                    if (!primaryScrollTarget && m) primaryScrollTarget = m;
+                }
+            });
         } else if (queryData.generalTerms.length > 0) {
+            const fbTitle = content.querySelector('h1, .content-title, .article-title, .fm-title, .title, .ltx_title_document, .ltx_title') || document.getElementById('fallback-paper-title');
+            if (fbTitle) highlightTerms(queryData.generalTerms, fbTitle);
             primaryScrollTarget = highlightTerms(queryData.generalTerms, content);
         }
 

@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from collections import Counter
 from bs4 import BeautifulSoup
 from loguru import logger
 
@@ -16,6 +17,22 @@ def canonical_paper_id(paper: dict) -> str:
         or paper.get("arxiv_id")
         or "unknown"
     )
+
+
+def roman_to_int(s: str) -> int:
+    roman_map = {'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000}
+    val = 0
+    s = s.upper()
+    try:
+        for i in range(len(s)):
+            if i + 1 < len(s) and roman_map[s[i]] < roman_map[s[i + 1]]:
+                val -= roman_map[s[i]]
+            else:
+                val += roman_map[s[i]]
+        return val if val > 0 else 1
+    except KeyError:
+        return 1
+
 
 def extract_tables_from_html(html: str):
     soup = BeautifulSoup(html, 'lxml')
@@ -120,10 +137,19 @@ def extract_tables_from_html(html: str):
         if re.match(r'^(?:Figure|Fig|Algorithm|Alg)\b', caption_text, re.I):
             continue
 
-        num_match = re.search(r'\b(?:Table|Tabella|Tbl)\s*(\d+)', caption_text, re.I) if caption_text else None
-        if not num_match:
-            continue
-        table_number = int(num_match.group(1))
+        # estrai numero tabella
+        table_number = len(valid_tables) + 1
+        raw_num = ""
+        num_match = re.search(r'\b(?:Table|Tabella|Tbl)\s*([0-9]+|[IVXLCDM]+)', caption_text, re.I) if caption_text else None
+        if num_match:
+            raw_num = num_match.group(1)
+            if raw_num.isdigit():
+                table_number = int(raw_num)
+            else:
+                table_number = roman_to_int(raw_num)
+
+        if not caption_text:
+            caption_text = f"Table {table_number}"
 
         extracted_rows = []
         for tr in rows:
@@ -137,6 +163,7 @@ def extract_tables_from_html(html: str):
         valid_tables.append({
             "table_index": len(valid_tables),
             "table_number": table_number,
+            "raw_num": raw_num,
             "element_id": element_id,
             "caption": caption_text,
             "rows": extracted_rows
@@ -165,6 +192,7 @@ def extract_detailed_tables(corpus_json: str) -> int:
         title = paper.get("title", "")
         pmc_id = paper.get("pmc_id", "")
         pmid = paper.get("paper_id", "")
+        source = paper.get("source", "pubmed" if pmc_id else "arxiv")
 
         tables = extract_tables_from_html(html)
 
@@ -175,38 +203,53 @@ def extract_detailed_tables(corpus_json: str) -> int:
         for t in tables:
             caption = t["caption"]
             body = ' '.join([' '.join(r) for r in t["rows"]])
+            t_num = str(t["table_number"])
+            raw_num = t.get("raw_num", "")
+            num_pattern = f"({t_num}|{raw_num})" if (raw_num and not raw_num.isdigit()) else f"({t_num})"
 
-            label_match = re.search(r'(?:Table|Tabella|Tbl)\s*(\d+)', caption, re.I)
-            label = label_match.group(1) if label_match else str(t["table_number"])
-
+            # cerca menzioni nel testo (sia formato arabo che romano)
             mentions = [
                 p for p in paragraphs
-                if re.search(rf'\b(Table|Tabella|Tbl)\s*{label}\b', p, re.I)
+                if re.search(rf'\b(Table|Tabella|Tbl|Tables)\s*(\.?\s*){num_pattern}\b', p, re.I)
             ]
 
-            caption_terms = [w for w in get_informative_terms(caption) if len(w) > 4 and w.lower() not in STOP_WORDS]
-            body_terms = [w for w in get_informative_terms(body) if len(w) > 4 and w.lower() not in STOP_WORDS][:8]
-            keywords = set(caption_terms + body_terms)
+            # seleziona termini frequenti
+            caption_words = [w for w in get_informative_terms(caption) if len(w) > 4 and w.lower() not in STOP_WORDS]
+            body_words = [w for w in get_informative_terms(body) if len(w) > 4 and w.lower() not in STOP_WORDS]
+
+            # termini piu frequenti della tabella
+            word_counts = Counter(caption_words * 2 + body_words)
+            top_keywords = set([w for w, _ in word_counts.most_common(12)])
 
             context = []
-            if keywords:
+            if top_keywords:
+                scored_paras = []
                 for p in paragraphs:
                     if p in mentions:
                         continue
-                    paragraph_words = set(re.findall(r'\b[a-zA-Z]{5,}\b', p.lower()))
-                    if len(paragraph_words & keywords) >= 2:
-                        context.append(p)
-                    if len(context) >= 5:
-                        break
+                    p_words = set(re.findall(r'\b[a-zA-Z]{4,}\b', p.lower()))
+                    overlap = len(p_words & top_keywords)
+                    if overlap >= 2:
+                        scored_paras.append((overlap, p))
+
+                # ordina per pertinenza e prendi i primi paragrafi
+                scored_paras.sort(key=lambda x: x[0], reverse=True)
+                context = [p for _, p in scored_paras[:5]]
+
+            # id univoco
+            unique_table_id = f"{paper_id}_table_{t_num}_{t['table_index']}"
+            if t.get("element_id"):
+                unique_table_id += f"_{t['element_id']}"
 
             all_tables.append({
                 "paper_id": paper_id,
                 "pmc_id": pmc_id,
                 "pmid": pmid,
+                "source": source,
                 "paper_title": title,
                 "table_index": t["table_index"],
                 "table_number": t["table_number"],
-                "table_id": f"{paper_id}_table_{t['table_number']}",
+                "table_id": unique_table_id,
                 "element_id": t.get("element_id", ""),
                 "caption": caption,
                 "body": body,
@@ -225,10 +268,29 @@ def extract_detailed_tables(corpus_json: str) -> int:
 
 
 if __name__ == "__main__":
-    json_path = os.path.join(
-        os.path.dirname(__file__),
-        "..", "..", "..",
-        "corpus.json"
-    )
-    num = extract_detailed_tables(json_path)
-    logger.info(f"Estratte {num} tabelle con contesto.")
+    import argparse
+    parser = argparse.ArgumentParser(description="Estrai tabelle con contesto")
+    parser.add_argument("--corpus", "-c", default=None, help="Percorso del corpus.json")
+    args = parser.parse_args()
+
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    targets = []
+    if args.corpus:
+        targets.append(args.corpus)
+    else:
+        for folder in ["pubmed", "arxiv"]:
+            p = os.path.join(project_root, folder, "corpus.json")
+            if os.path.exists(p):
+                targets.append(p)
+        if not targets:
+            fallback = os.path.join(project_root, "corpus.json")
+            if os.path.exists(fallback):
+                targets.append(fallback)
+
+    total = 0
+    for target in targets:
+        logger.info(f"Avvio estrazione tabelle da: {target}")
+        n = extract_detailed_tables(target)
+        logger.info(f"Estratte {n} tabelle per {target}")
+        total += n
+    logger.success(f"Estrazione completata: {total} tabelle totali.")
